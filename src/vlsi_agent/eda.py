@@ -231,7 +231,7 @@ def parse_diagnostics(output: str) -> tuple[Diagnostic, ...]:
         if not m:
             continue
         severity = m["severity"]
-        message = m["message"].strip()
+        message = m["message"].strip().lstrip(":").strip()  # continuation lines start with ": "
         if severity == "sorry":  # iverilog's word for "unsupported construct"
             severity = "error"
         elif severity is None:

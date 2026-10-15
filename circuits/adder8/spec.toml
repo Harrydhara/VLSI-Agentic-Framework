@@ -1,0 +1,34 @@
+name = "adder8"
+family = "adder"
+split = "heldout"
+top = "adder8"
+description = """
+An 8-bit binary adder with carry-in and carry-out.
+sum and cout together form the 9-bit result of a + b + cin, that is {cout, sum} = a + b + cin.
+The circuit is purely combinational: no clock, no registers, no latches.
+"""
+
+[[ports]]
+name = "a"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "b"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "cin"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "sum"
+direction = "output"
+width = 8
+
+[[ports]]
+name = "cout"
+direction = "output"
+width = 1

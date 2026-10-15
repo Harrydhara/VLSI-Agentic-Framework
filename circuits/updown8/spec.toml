@@ -1,0 +1,34 @@
+name = "updown8"
+family = "counter"
+split = "heldout"
+top = "updown8"
+description = """
+An 8-bit up/down counter with enable and an asynchronous, active-low reset.
+- Whenever rst_n is 0, count becomes 0 immediately, without waiting for a clock edge, and stays 0 while rst_n is 0.
+- Otherwise, on each rising edge of clk: if en is 1, count increases by 1 when up is 1 and decreases by 1 when up is 0, wrapping around (255 + 1 = 0 and 0 - 1 = 255); if en is 0, count keeps its value.
+"""
+
+[[ports]]
+name = "clk"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "rst_n"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "en"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "up"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "count"
+direction = "output"
+width = 8

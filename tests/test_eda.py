@@ -92,11 +92,14 @@ def test_parse_diagnostics_from_real_iverilog_messages():
         "design.v:2: error: Unknown module type: foo\n"
         "design.v:7: warning: Port 1 (a) of m expects 4 bits, got 1.\n"
         "design.v:9: sorry: constant selects in always_* processes are not supported.\n"
+        "design.v:7:        : Pruning 4 high bits of the expression.\n"
         "2 error(s) during elaboration.\n"
     )
     found = eda.parse_diagnostics(output)
-    assert [(d.line, d.severity) for d in found] == [(3, "error"), (2, "error"), (7, "warning"), (9, "error")]
+    assert [(d.line, d.severity) for d in found] == [
+        (3, "error"), (2, "error"), (7, "warning"), (9, "error"), (7, "note")]
     assert found[1].message == "Unknown module type: foo"
+    assert found[4].message == "Pruning 4 high bits of the expression."
     assert all(d.file == "design.v" for d in found)
 
 

@@ -1,0 +1,6 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_ternary.v" = "pass"
+"sel_bits_swapped.v" = "fail"
+"missing_case_latch.v" = "fail"
+"incomplete_sensitivity.v" = "fail"

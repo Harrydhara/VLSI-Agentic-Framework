@@ -7,8 +7,9 @@ from vlsi_agent.circuits import get_circuit
 def test_circuits_lists_every_circuit(capsys):
     assert cli.main(["circuits"]) == 0
     out = capsys.readouterr().out
-    for name in ("adder4", "counter4", "mux2"):
+    for name in ("adder4", "counter4", "mux2", "adder8", "mux4", "updown8"):
         assert name in out
+    assert "heldout" in out
 
 
 def test_evaluate_unknown_circuit(tmp_path, capsys):

@@ -29,9 +29,17 @@ def edit(path: Path, old: str, new: str) -> None:
 # --------------------------------------------------------------- loading and validation
 
 
-def test_every_family_has_a_circuit():
-    assert {c.spec.family for c in ALL} >= {"adder", "mux", "counter"}
+@pytest.mark.parametrize("split", circuits.SPLITS)
+def test_each_split_covers_every_family(split):
+    assert {c.spec.family for c in load_circuits(split=split)} >= {"adder", "mux", "counter"}
+
+
+def test_circuits_are_sorted_and_split_apart():
     assert [c.name for c in ALL] == sorted(c.name for c in ALL)
+    dev = {c.name for c in load_circuits(split="dev")}
+    heldout = {c.name for c in load_circuits(split="heldout")}
+    assert dev and heldout and not dev & heldout
+    assert dev | heldout == {c.name for c in ALL}
 
 
 def test_interface_is_rendered_from_the_ports():

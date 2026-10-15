@@ -1,0 +1,7 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_next_state.v" = "pass"
+"sync_reset.v" = "fail"
+"reset_active_high.v" = "fail"
+"direction_inverted.v" = "fail"
+"stops_at_zero.v" = "fail"

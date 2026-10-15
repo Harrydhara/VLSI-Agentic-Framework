@@ -1,0 +1,6 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_ripple.v" = "pass"
+"nibble_carry_dropped.v" = "fail"
+"cout_from_bit7.v" = "fail"
+"wrong_port_width.v" = "fail"
