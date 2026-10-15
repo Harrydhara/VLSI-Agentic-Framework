@@ -1,0 +1,7 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_always.v" = "pass"
+"swapped_select.v" = "fail"
+"low_nibble_only.v" = "fail"
+"missing_event_control.v" = "compile_error"
+"loop_without_increment.v" = "timeout"

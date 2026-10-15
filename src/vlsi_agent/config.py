@@ -11,7 +11,8 @@ import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
 
-DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config" / "default.toml"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.toml"
 
 
 class ConfigError(ValueError):

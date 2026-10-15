@@ -30,6 +30,25 @@ All checks should say `OK`. Tool paths and the model name are in `config/default
 ~/.venvs/vlsi-agent/bin/pytest -m "not integration"   # skip tests that need the real tools/Ollama
 ```
 
+## Circuits and reference tests
+
+Each circuit has a folder in `circuits/`:
+
+| File | Who sees it | Purpose |
+|---|---|---|
+| `spec.toml` | the agent | Description and exact ports; `split` is `dev` (tune prompts on these) or `heldout` (final comparison only) |
+| `reference_tb.v` | never the agent | Hidden reference test used for final scoring |
+| `fixtures/*.v` + `fixtures/expected.toml` | developers | Known-correct and deliberately faulty designs, each with its expected outcome |
+
+```bash
+vlsi-agent circuits                                  # list circuits
+vlsi-agent evaluate adder4 my_adder.v --waveform     # score any Verilog file; files go to runs/evaluate/
+vlsi-agent check-fixtures                            # every fixture must get its expected outcome
+```
+
+Outcomes: `pass`, `fail`, `compile_error` (including a wrong port name), `timeout`, or
+`error` (the simulator crashed, or no result line appeared).
+
 ## Testbench convention
 
 A testbench reports its score by printing exactly this line before `$finish`:
@@ -42,6 +61,10 @@ The simulator's exit code is not enough: `vvp` exits 0 even when a testbench nev
 checks anything or forgets `$finish`. A run counts as passing only if `vvp` exits 0
 before the timeout **and** the last `RESULT` line shows `passed == total` with `total > 0`.
 
+Reference tests print `RESULT __RESULT_TOKEN__: ...` instead. The placeholder is
+replaced with a random token on every run and only that line counts, so a generated
+design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
+
 ## Layout
 
 | Path | What it holds |
@@ -49,4 +72,7 @@ before the timeout **and** the last `RESULT` line shows `passed == total` with `
 | `config/default.toml` | Model, Ollama URL, pinned EDA tool paths, tool timeouts |
 | `src/vlsi_agent/` | The Python package (`cli.py`, `config.py`, `doctor.py`, ...) |
 | `src/vlsi_agent/eda.py` | Runs iverilog, vvp and Yosys with timeouts; returns structured results |
+| `src/vlsi_agent/circuits.py` | Loads and validates circuit folders |
+| `src/vlsi_agent/evaluate.py` | Scores a design with a circuit's hidden reference test |
+| `circuits/` | Circuit specs, reference tests and fixtures |
 | `tests/` | pytest tests |

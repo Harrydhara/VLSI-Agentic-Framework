@@ -1,0 +1,29 @@
+name = "mux2"
+family = "mux"
+split = "dev"
+top = "mux2"
+description = """
+A 2-to-1 multiplexer for 8-bit data.
+When sel is 0, y equals a. When sel is 1, y equals b.
+The circuit is purely combinational: no clock, no registers, no latches.
+"""
+
+[[ports]]
+name = "a"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "b"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "sel"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "y"
+direction = "output"
+width = 8

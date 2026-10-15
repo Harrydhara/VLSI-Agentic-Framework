@@ -61,7 +61,7 @@ def alive(pid: int) -> bool:
     """True if the process exists and is not a zombie waiting to be reaped."""
     try:
         state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-    except (FileNotFoundError, IndexError):
+    except (OSError, IndexError):  # ProcessLookupError if it exits while we read
         return False
     return state not in ("Z", "X")
 
@@ -103,6 +103,13 @@ def test_parse_diagnostics_from_real_iverilog_messages():
 def test_parse_result_line_uses_the_last_one():
     assert eda.parse_result_line("RESULT: 1/4 passed\nmore\nRESULT: 3/4 passed\n") == (3, 4)
     assert eda.parse_result_line("no summary here") == (None, None)
+
+
+def test_parse_result_line_with_token_only_trusts_that_token():
+    output = "RESULT: 9/9 passed\nRESULT abc123: 2/9 passed\nRESULT other: 9/9 passed\n"
+    assert eda.parse_result_line(output, token="abc123") == (2, 9)
+    assert eda.parse_result_line(output, token="missing") == (None, None)
+    assert eda.parse_result_line(output) == (9, 9)  # no token: plain lines only
 
 
 def test_timeout_kills_the_whole_process_group(tmp_path):

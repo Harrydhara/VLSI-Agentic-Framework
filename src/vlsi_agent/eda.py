@@ -14,7 +14,9 @@ Testbench convention: a testbench reports its score by printing one line
     RESULT: <passed>/<total> passed
 
 before calling $finish. The vvp exit code is not enough on its own: it is 0 even when
-a testbench forgets $finish or never checks anything.
+a testbench forgets $finish or never checks anything. Reference tests add a random
+per-run token (`RESULT <token>: ...`) so a design that prints its own RESULT line
+cannot fake a pass; see evaluate.py.
 """
 
 from __future__ import annotations
@@ -40,7 +42,8 @@ SYNTH_STAT_NAME = "synth_stat.json"
 
 _SAFE_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-/]*$")
 _SAFE_MODULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
-_RESULT_LINE = re.compile(r"^RESULT: (\d+)/(\d+) passed\s*$", re.MULTILINE)
+_RESULT_LINE = re.compile(r"^RESULT(?: (?P<token>\S+))?: (?P<passed>\d+)/(?P<total>\d+) passed\s*$",
+                          re.MULTILINE)
 _DIAGNOSTIC = re.compile(
     r"^(?P<file>[^\s:][^:]*):(?P<line>\d+):\s*(?:(?P<severity>error|warning|sorry):\s*)?(?P<message>.+)$"
 )
@@ -237,13 +240,16 @@ def parse_diagnostics(output: str) -> tuple[Diagnostic, ...]:
     return tuple(found)
 
 
-def parse_result_line(output: str) -> tuple[int | None, int | None]:
-    """Return (passed, total) from the last RESULT line, or (None, None)."""
-    matches = _RESULT_LINE.findall(output)
+def parse_result_line(output: str, token: str | None = None) -> tuple[int | None, int | None]:
+    """Return (passed, total) from the last matching RESULT line, or (None, None).
+
+    With a token, only `RESULT <token>: ...` lines count; without one, only plain
+    `RESULT: ...` lines do.
+    """
+    matches = [m for m in _RESULT_LINE.finditer(output) if m["token"] == token]
     if not matches:
         return None, None
-    passed, total = matches[-1]
-    return int(passed), int(total)
+    return int(matches[-1]["passed"]), int(matches[-1]["total"])
 
 
 # --------------------------------------------------------------------------- tools
@@ -268,7 +274,8 @@ def compile_verilog(tools: ToolsConfig, workdir: Path, sources: Sequence[str],
     return CompileResult(ok, parse_diagnostics(run.output), run)
 
 
-def simulate(tools: ToolsConfig, workdir: Path, plusargs: Sequence[str] = ()) -> SimResult:
+def simulate(tools: ToolsConfig, workdir: Path, plusargs: Sequence[str] = (),
+             result_token: str | None = None) -> SimResult:
     """Run the compiled sim.vvp with vvp and read the testbench's RESULT line."""
     workdir = _check_workdir(workdir)
     if not (workdir / COMPILED_NAME).is_file():
@@ -278,7 +285,7 @@ def simulate(tools: ToolsConfig, workdir: Path, plusargs: Sequence[str] = ()) ->
 
     cmd = [tools.vvp, "-n", COMPILED_NAME, *plusargs]  # -n: $stop ends the run instead of prompting
     run = run_tool(cmd, workdir, tools.sim_timeout_s, _max_bytes(tools))
-    passed, total = parse_result_line(run.output)
+    passed, total = parse_result_line(run.output, result_token)
     vcds = tuple(sorted(p.name for p in workdir.glob("*.vcd")))
     completed = run.returncode == 0 and not run.timed_out
     return SimResult(completed, passed, total, vcds, run)

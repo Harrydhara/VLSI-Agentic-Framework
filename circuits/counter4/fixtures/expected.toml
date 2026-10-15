@@ -1,0 +1,7 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_next_state.v" = "pass"
+"async_reset.v" = "fail"
+"active_low_reset.v" = "fail"
+"ignores_enable.v" = "fail"
+"saturates_at_15.v" = "fail"

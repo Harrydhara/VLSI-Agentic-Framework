@@ -1,0 +1,32 @@
+name = "counter4"
+family = "counter"
+split = "dev"
+top = "counter4"
+description = """
+A 4-bit synchronous up-counter with reset and enable.
+On each rising edge of clk:
+- if rst is 1, count becomes 0 (synchronous, active-high reset; it has priority over en);
+- otherwise, if en is 1, count increases by 1, wrapping from 15 back to 0;
+- otherwise, count keeps its value.
+count changes only on rising edges of clk. Its value before the first reset does not matter.
+"""
+
+[[ports]]
+name = "clk"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "rst"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "en"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "count"
+direction = "output"
+width = 4
