@@ -12,3 +12,9 @@ request_timeout_s = 300
 iverilog = "/usr/bin/iverilog"
 vvp = "/usr/bin/vvp"
 yosys = "/usr/local/bin/yosys"
+
+# A tool still running after its timeout is killed and the result is marked timed_out.
+compile_timeout_s = 30
+sim_timeout_s = 10      # a testbench that never calls $finish hits this
+synth_timeout_s = 60
+max_log_kb = 64         # keep at most this much of each tool's output (start and end)

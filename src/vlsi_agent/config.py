@@ -30,6 +30,10 @@ class ToolsConfig:
     iverilog: str
     vvp: str
     yosys: str
+    compile_timeout_s: float
+    sim_timeout_s: float
+    synth_timeout_s: float
+    max_log_kb: int
 
 
 @dataclass(frozen=True)

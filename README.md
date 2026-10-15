@@ -30,10 +30,23 @@ All checks should say `OK`. Tool paths and the model name are in `config/default
 ~/.venvs/vlsi-agent/bin/pytest -m "not integration"   # skip tests that need the real tools/Ollama
 ```
 
+## Testbench convention
+
+A testbench reports its score by printing exactly this line before `$finish`:
+
+```verilog
+$display("RESULT: %0d/%0d passed", passed, total);
+```
+
+The simulator's exit code is not enough: `vvp` exits 0 even when a testbench never
+checks anything or forgets `$finish`. A run counts as passing only if `vvp` exits 0
+before the timeout **and** the last `RESULT` line shows `passed == total` with `total > 0`.
+
 ## Layout
 
 | Path | What it holds |
 |---|---|
-| `config/default.toml` | Model, Ollama URL, pinned EDA tool paths |
+| `config/default.toml` | Model, Ollama URL, pinned EDA tool paths, tool timeouts |
 | `src/vlsi_agent/` | The Python package (`cli.py`, `config.py`, `doctor.py`, ...) |
+| `src/vlsi_agent/eda.py` | Runs iverilog, vvp and Yosys with timeouts; returns structured results |
 | `tests/` | pytest tests |

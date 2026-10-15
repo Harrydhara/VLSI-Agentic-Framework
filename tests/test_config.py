@@ -12,6 +12,10 @@ request_timeout_s = 300
 iverilog = "/usr/bin/iverilog"
 vvp = "/usr/bin/vvp"
 yosys = "/usr/local/bin/yosys"
+compile_timeout_s = 30
+sim_timeout_s = 10
+synth_timeout_s = 60
+max_log_kb = 64
 """
 
 

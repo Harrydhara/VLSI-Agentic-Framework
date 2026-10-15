@@ -22,5 +22,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "integration: needs the real EDA tools and a running Ollama server (run inside WSL)",
+    "integration: needs the real EDA tools and/or a running Ollama server (run inside WSL)",
 ]
