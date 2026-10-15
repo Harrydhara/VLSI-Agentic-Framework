@@ -1,0 +1,5 @@
+# Code runs inside WSL/Docker (Linux), so keep LF line endings even on Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
