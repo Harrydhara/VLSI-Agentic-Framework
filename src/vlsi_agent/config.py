@@ -24,6 +24,11 @@ class LLMConfig:
     base_url: str
     model: str
     request_timeout_s: float
+    temperature: float
+    seed: int
+    think: bool
+    keep_alive: str
+    max_output_tokens: int
 
 
 @dataclass(frozen=True)
@@ -54,6 +59,8 @@ def _check_type(section: str, key: str, value: object, type_name: str) -> object
     if type_name == "float" and isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
     if type_name == "int" and isinstance(value, int) and not isinstance(value, bool):
+        return value
+    if type_name == "bool" and isinstance(value, bool):
         return value
     raise ConfigError(f"[{section}] {key} should be {type_name}, got {type(value).__name__} {value!r}")
 

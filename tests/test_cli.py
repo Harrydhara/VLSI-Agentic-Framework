@@ -2,6 +2,41 @@ import pytest
 
 from vlsi_agent import cli
 from vlsi_agent.circuits import get_circuit
+from vlsi_agent.llm import Completion, LLMError
+
+
+class ScriptedOllama:
+    """Stands in for OllamaLLM inside the CLI; returns or raises a scripted result."""
+
+    result: Completion | LLMError
+    sent: list = []
+
+    def __init__(self, config):
+        pass
+
+    def complete(self, messages):
+        ScriptedOllama.sent = list(messages)
+        if isinstance(self.result, LLMError):
+            raise self.result
+        return self.result
+
+
+def test_ask_prints_reply_and_usage(monkeypatch, capsys):
+    ScriptedOllama.result = Completion("endmodule", "gemma4:26b", 28, 3, 0.4, truncated=False)
+    monkeypatch.setattr(cli, "OllamaLLM", ScriptedOllama)
+    assert cli.main(["ask", "Which keyword ends a module?", "--system", "Be brief."]) == 0
+    out, err = capsys.readouterr()
+    assert out.strip() == "endmodule"
+    assert "28 prompt + 3 output tokens" in err
+    assert [(m.role, m.content) for m in ScriptedOllama.sent] == [
+        ("system", "Be brief."), ("user", "Which keyword ends a module?")]
+
+
+def test_ask_reports_llm_errors(monkeypatch, capsys):
+    ScriptedOllama.result = LLMError("cannot reach Ollama")
+    monkeypatch.setattr(cli, "OllamaLLM", ScriptedOllama)
+    assert cli.main(["ask", "hi"]) == 1
+    assert "LLM error: cannot reach Ollama" in capsys.readouterr().err
 
 
 def test_circuits_lists_every_circuit(capsys):

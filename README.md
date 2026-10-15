@@ -23,6 +23,16 @@ python3 -m venv ~/.venvs/vlsi-agent
 
 All checks should say `OK`. Tool paths and the model name are in `config/default.toml`.
 
+To send the model a single prompt (the reply goes to stdout, token usage to stderr):
+
+```bash
+~/.venvs/vlsi-agent/bin/vlsi-agent ask "Which Verilog keyword ends a module?"
+```
+
+Model settings (`temperature`, `seed`, `think`, `max_output_tokens`, ...) are in the
+`[llm]` section of the config. A fixed seed helps, but identical runs on a GPU can
+still give different answers, so compare settings over several runs.
+
 ## Run the tests
 
 ```bash
@@ -74,5 +84,6 @@ design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 | `src/vlsi_agent/eda.py` | Runs iverilog, vvp and Yosys with timeouts; returns structured results |
 | `src/vlsi_agent/circuits.py` | Loads and validates circuit folders |
 | `src/vlsi_agent/evaluate.py` | Scores a design with a circuit's hidden reference test |
+| `src/vlsi_agent/llm.py` | Ollama client, scripted `FakeLLM` for tests, Verilog extraction from replies |
 | `circuits/` | Circuit specs, reference tests and fixtures |
 | `tests/` | pytest tests |

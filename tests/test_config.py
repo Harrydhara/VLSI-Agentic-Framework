@@ -7,6 +7,11 @@ VALID = """
 base_url = "http://localhost:11434"
 model = "gemma4:26b"
 request_timeout_s = 300
+temperature = 0.2
+seed = 42
+think = false
+keep_alive = "10m"
+max_output_tokens = 4096
 
 [tools]
 iverilog = "/usr/bin/iverilog"
@@ -60,6 +65,17 @@ def test_wrong_type_is_rejected(tmp_path, bad_value):
     text = VALID.replace("request_timeout_s = 300", f"request_timeout_s = {bad_value}")
     with pytest.raises(ConfigError, match=r"request_timeout_s should be float"):
         load_config(write(tmp_path, text))
+
+
+@pytest.mark.parametrize("old,new,message", [
+    ("think = false", 'think = "no"', "think should be bool"),
+    ("think = false", "think = 0", "think should be bool"),
+    ("seed = 42", "seed = 4.2", "seed should be int"),
+    ("seed = 42", "seed = true", "seed should be int"),
+])
+def test_bool_and_int_are_not_interchangeable(tmp_path, old, new, message):
+    with pytest.raises(ConfigError, match=message):
+        load_config(write(tmp_path, VALID.replace(old, new)))
 
 
 def test_invalid_toml_names_the_file(tmp_path):

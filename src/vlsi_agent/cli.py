@@ -12,6 +12,7 @@ from vlsi_agent import __version__, doctor
 from vlsi_agent.circuits import CircuitError, get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config
 from vlsi_agent.evaluate import reference_test
+from vlsi_agent.llm import LLMError, Message, OllamaLLM
 
 RUNS_DIR = PROJECT_ROOT / "runs"
 
@@ -35,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     fx = sub.add_parser("check-fixtures", help="run every fixture and compare with its expected outcome")
     fx.add_argument("names", nargs="*", metavar="circuit", help="circuits to check (default: all)")
+
+    ask = sub.add_parser("ask", help="send one prompt to the configured model and print the reply")
+    ask.add_argument("prompt")
+    ask.add_argument("--system", help="optional system message")
+    ask.add_argument("--show-thinking", action="store_true", help="also print the model's reasoning (needs think = true)")
     return parser
 
 
@@ -79,6 +85,22 @@ def cmd_check_fixtures(config: Config, names: list[str]) -> int:
     return 0 if not wrong else 1
 
 
+def cmd_ask(config: Config, prompt: str, system: str | None, show_thinking: bool) -> int:
+    messages = ([Message("system", system)] if system else []) + [Message("user", prompt)]
+    try:
+        reply = OllamaLLM(config.llm).complete(messages)
+    except LLMError as e:
+        print(f"LLM error: {e}", file=sys.stderr)
+        return 1
+    if show_thinking and reply.thinking:
+        print(f"[thinking]\n{reply.thinking.strip()}\n[/thinking]\n")
+    print(reply.text.strip())
+    note = ", TRUNCATED at max_output_tokens" if reply.truncated else ""
+    print(f"[{reply.model}: {reply.prompt_tokens} prompt + {reply.output_tokens} output tokens, "
+          f"{reply.duration_s:.1f} s{note}]", file=sys.stderr)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
@@ -96,6 +118,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_evaluate(config, args.circuit, args.design, args.waveform)
         if args.command == "check-fixtures":
             return cmd_check_fixtures(config, args.names)
+        if args.command == "ask":
+            return cmd_ask(config, args.prompt, args.system, args.show_thinking)
     except CircuitError as e:
         print(f"circuit error: {e}", file=sys.stderr)
         return 2
