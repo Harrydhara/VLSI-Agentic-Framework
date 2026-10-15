@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import tempfile
 import time
 from pathlib import Path
 
 from vlsi_agent import __version__, doctor
+from vlsi_agent.agent import run_agent
 from vlsi_agent.circuits import CircuitError, get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config
 from vlsi_agent.evaluate import reference_test
-from vlsi_agent.llm import LLMError, Message, OllamaLLM
+from vlsi_agent.llm import FakeLLM, LLMError, Message, OllamaLLM
+from vlsi_agent.prompts import PromptError
 
 RUNS_DIR = PROJECT_ROOT / "runs"
 
@@ -36,6 +39,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     fx = sub.add_parser("check-fixtures", help="run every fixture and compare with its expected outcome")
     fx.add_argument("names", nargs="*", metavar="circuit", help="circuits to check (default: all)")
+
+    run = sub.add_parser("run", help="run the agent on a circuit: generate, check, revise, then score")
+    run.add_argument("circuit", help="circuit name, e.g. adder4")
+    mode = run.add_mutually_exclusive_group()
+    mode.add_argument("--attempts", type=int, help="maximum attempts (default: [agent] max_attempts)")
+    mode.add_argument("--one-shot", action="store_true", help="one attempt, no revision (the baseline)")
+    run.add_argument("--budget", type=int, metavar="TOKENS", help="token budget (default: [agent] max_total_tokens)")
+    run.add_argument("--prompts", type=Path, metavar="DIR", help="prompts folder (default: [agent] prompts_dir)")
+    run.add_argument("--fake", type=Path, metavar="JSON",
+                     help="replay scripted replies from a JSON list of strings instead of calling the model")
 
     ask = sub.add_parser("ask", help="send one prompt to the configured model and print the reply")
     ask.add_argument("prompt")
@@ -85,6 +98,81 @@ def cmd_check_fixtures(config: Config, names: list[str]) -> int:
     return 0 if not wrong else 1
 
 
+def _checks_text(e: dict) -> str:
+    if not e.get("code_found"):
+        return "no Verilog in the reply"
+    if not e.get("has_top"):
+        return "top module missing"
+    if not e.get("compiled"):
+        return "design does not compile"
+    parts = ["compiled"]
+    if not e.get("has_testbench"):
+        parts.append("no testbench")
+    elif e.get("sim_timed_out"):
+        parts.append("testbench timed out")
+    elif "tb_total" in e:
+        parts.append(f"testbench {e['tb_passed']}/{e['tb_total']}" if e["tb_total"] is not None
+                     else "testbench printed no RESULT")
+    if e.get("synth_ok"):
+        parts.append(f"{e['cells']} cells" + (f", {e['latches']} latches" if e["latches"] else ""))
+    elif "synth_ok" in e:
+        parts.append("synthesis failed")
+    return ", ".join(parts)
+
+
+def print_event(e: dict) -> None:
+    kind, n = e["event"], e.get("attempt")
+    lines = {
+        "run_started": lambda: f"{e['circuit']} ({e['split']}) with {e['model']}: up to {e['max_attempts']} "
+                               f"attempt(s), budget {e['max_total_tokens']} tokens",
+        "model_called": lambda: f"attempt {n}: asking the model...",
+        "model_replied": lambda: f"attempt {n}: reply of {e['output_tokens']} tokens in {e['duration_s']:.1f} s"
+                                 + (" (cut off at the token limit)" if e["truncated"] else ""),
+        "checks_done": lambda: f"attempt {n}: development checks {'PASSED' if e['passed'] else 'FAILED'} "
+                               f"({_checks_text(e)})",
+        "feedback_sent": lambda: f"attempt {n}: sent the check results back to the model ({e['chars']} chars)",
+        "budget_exhausted": lambda: f"token budget used up ({e['used']}/{e['budget']}), stopping",
+        "model_error": lambda: f"attempt {n}: model error: {e['error']}",
+        "reference_scored": lambda: f"hidden reference test on attempt {n}: {e['outcome'].upper()}"
+                                    + (f" {e['passed']}/{e['total']}" if e["total"] else ""),
+        "run_finished": lambda: f"finished: {e['status']} after {e['attempts']} attempt(s), "
+                                f"{e['total_tokens']} tokens, {e['duration_s']:.1f} s",
+    }
+    if kind in lines:
+        print(lines[kind](), flush=True)
+
+
+def cmd_run(config: Config, args: argparse.Namespace) -> int:
+    circuit = get_circuit(args.circuit)
+    attempts = 1 if args.one_shot else (args.attempts if args.attempts is not None else config.agent.max_attempts)
+    if attempts < 1:
+        print("--attempts must be at least 1", file=sys.stderr)
+        return 2
+    if args.fake:
+        try:
+            responses = json.loads(args.fake.read_text())
+        except (OSError, ValueError) as e:
+            print(f"cannot read --fake file: {e}", file=sys.stderr)
+            return 2
+        if not isinstance(responses, list) or not all(isinstance(r, str) for r in responses):
+            print("--fake file must contain a JSON list of strings", file=sys.stderr)
+            return 2
+        llm = FakeLLM(responses)
+    else:
+        llm = OllamaLLM(config.llm)
+
+    mode = "oneshot" if attempts == 1 else f"iter{attempts}"
+    base = RUNS_DIR / "agent" / f"{time.strftime('%Y%m%d-%H%M%S')}-{circuit.name}-{mode}"
+    run_dir, n = base, 1
+    while run_dir.exists():
+        n += 1
+        run_dir = base.with_name(f"{base.name}-{n}")
+    result = run_agent(config, circuit, llm, run_dir, max_attempts=attempts, max_total_tokens=args.budget,
+                       prompts_dir=args.prompts, on_event=print_event)
+    print(f"files: {result.run_dir}")
+    return 0 if result.reference is not None and result.reference.outcome == "pass" else 1
+
+
 def cmd_ask(config: Config, prompt: str, system: str | None, show_thinking: bool) -> int:
     messages = ([Message("system", system)] if system else []) + [Message("user", prompt)]
     try:
@@ -118,10 +206,15 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_evaluate(config, args.circuit, args.design, args.waveform)
         if args.command == "check-fixtures":
             return cmd_check_fixtures(config, args.names)
+        if args.command == "run":
+            return cmd_run(config, args)
         if args.command == "ask":
             return cmd_ask(config, args.prompt, args.system, args.show_thinking)
     except CircuitError as e:
         print(f"circuit error: {e}", file=sys.stderr)
+        return 2
+    except PromptError as e:
+        print(f"prompt error: {e}", file=sys.stderr)
         return 2
     raise AssertionError(f"unhandled command {args.command!r}")
 

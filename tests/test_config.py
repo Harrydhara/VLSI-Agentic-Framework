@@ -13,6 +13,12 @@ think = false
 keep_alive = "10m"
 max_output_tokens = 4096
 
+[agent]
+max_attempts = 3
+max_total_tokens = 50000
+prompts_dir = "prompts/default"
+feedback_max_chars = 3000
+
 [tools]
 iverilog = "/usr/bin/iverilog"
 vvp = "/usr/bin/vvp"

@@ -60,6 +60,43 @@ def test_evaluate_missing_design_file(capsys):
 
 
 @pytest.mark.integration
+def test_run_with_scripted_replies_shows_the_revision(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path)
+    script = cli.PROJECT_ROOT / "examples" / "scripted_adder4.json"
+    assert cli.main(["run", "adder4", "--fake", str(script), "--attempts", "3"]) == 0
+    out = capsys.readouterr().out
+    assert "attempt 1: development checks FAILED (compiled, testbench 256/512" in out
+    assert "attempt 1: sent the check results back to the model" in out
+    assert "attempt 2: development checks PASSED" in out
+    assert "hidden reference test on attempt 2: PASS 512/512" in out
+    assert "finished: dev_passed after 2 attempt(s)" in out
+    [run_dir] = (tmp_path / "agent").iterdir()
+    assert run_dir.name.endswith("-adder4-iter3") and (run_dir / "history.json").is_file()
+
+
+@pytest.mark.integration
+def test_one_shot_run_scores_without_revising(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path)
+    script = cli.PROJECT_ROOT / "examples" / "scripted_adder4.json"
+    assert cli.main(["run", "adder4", "--fake", str(script), "--one-shot"]) == 1  # reference test fails
+    out = capsys.readouterr().out
+    assert "up to 1 attempt(s)" in out and "sent the check results" not in out
+    assert "hidden reference test on attempt 1: FAIL 256/512" in out
+
+
+def test_run_rejects_a_bad_fake_file(tmp_path, capsys):
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"not": "a list"}')
+    assert cli.main(["run", "adder4", "--fake", str(bad)]) == 2
+    assert "JSON list of strings" in capsys.readouterr().err
+
+
+def test_run_rejects_zero_attempts(capsys):
+    assert cli.main(["run", "adder4", "--attempts", "0"]) == 2
+    assert "at least 1" in capsys.readouterr().err
+
+
+@pytest.mark.integration
 def test_evaluate_reports_pass_and_fail(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "RUNS_DIR", tmp_path)
     circuit = get_circuit("adder4")

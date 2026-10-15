@@ -11,6 +11,12 @@ think = false             # true: gemma4 reasons before answering (slower; those
 keep_alive = "10m"        # how long Ollama keeps the model in GPU memory after a call
 max_output_tokens = 4096  # cap per call; a reply that hits it is marked truncated
 
+[agent]
+max_attempts = 3              # 1 = one-shot baseline; more = revise from development-check feedback
+max_total_tokens = 50000      # no new model call starts once this many tokens (prompt + output) are used
+prompts_dir = "prompts/default"   # system.txt, task.txt, feedback.txt (relative to the project folder)
+feedback_max_chars = 3000     # cap on the tool output sent back to the model per attempt
+
 [tools]
 # Absolute paths on purpose: this machine has three yosys installs (0.33, 0.52, 0.57),
 # and synthesis cell counts can change between versions.

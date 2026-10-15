@@ -40,6 +40,36 @@ still give different answers, so compare settings over several runs.
 ~/.venvs/vlsi-agent/bin/pytest -m "not integration"   # skip tests that need the real tools/Ollama
 ```
 
+## Run the agent
+
+```bash
+vlsi-agent run adder4                  # iterative: up to [agent] max_attempts (3) attempts
+vlsi-agent run adder4 --one-shot       # baseline: one attempt, no revision
+vlsi-agent run adder4 --fake examples/scripted_adder4.json   # scripted replies, no GPU needed
+vlsi-agent run adder4 --budget 20000 --prompts my_prompts/   # token budget, your own prompts
+```
+
+Each attempt asks the model for the design **and its own testbench**. The development
+checks (compile, run that testbench, synthesize, look for latches) are the only feedback
+the model gets. The loop stops when they pass, when the attempts run out, or before a
+model call once the token budget is used up. Then the final design is scored with the
+circuit's **hidden reference test**, which the model never sees.
+
+The run status (`dev_passed`, `attempts_exhausted`, `token_budget_exhausted`,
+`llm_error`) describes the development checks. The score is the reference outcome. The two
+can disagree: a wrong testbench written by the model can reject a correct design.
+
+Each run gets a folder under `runs/agent/`: `events.jsonl` (written live),
+`history.json` (settings, every attempt, the score), `attempt_<n>/` (raw reply, design,
+testbench, tool logs, the feedback sent), and `reference/`.
+
+## Changing the strategy
+
+The prompts are plain text in `prompts/default/` (`system.txt`, `task.txt`,
+`feedback.txt`) with `{{placeholders}}`. Copy the folder, edit the copy, and run with
+`--prompts <folder>` (or set `prompts_dir` in a config copy). A misspelled placeholder
+is reported before any model call.
+
 ## Circuits and reference tests
 
 Each circuit has a folder in `circuits/`:
@@ -85,5 +115,10 @@ design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 | `src/vlsi_agent/circuits.py` | Loads and validates circuit folders |
 | `src/vlsi_agent/evaluate.py` | Scores a design with a circuit's hidden reference test |
 | `src/vlsi_agent/llm.py` | Ollama client, scripted `FakeLLM` for tests, Verilog extraction from replies |
+| `src/vlsi_agent/agent.py` | The generate / check / revise loop, event log, history export |
+| `src/vlsi_agent/devcheck.py` | Development checks: the only feedback the model sees |
+| `src/vlsi_agent/prompts.py` | Loads and fills the prompt templates |
+| `prompts/default/` | The starter agent's prompts |
+| `examples/` | Scripted replies for running without a GPU |
 | `circuits/` | Circuit specs, reference tests and fixtures |
 | `tests/` | pytest tests |

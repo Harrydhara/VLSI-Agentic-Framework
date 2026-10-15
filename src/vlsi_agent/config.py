@@ -32,6 +32,14 @@ class LLMConfig:
 
 
 @dataclass(frozen=True)
+class AgentConfig:
+    max_attempts: int
+    max_total_tokens: int
+    prompts_dir: str
+    feedback_max_chars: int
+
+
+@dataclass(frozen=True)
 class ToolsConfig:
     iverilog: str
     vvp: str
@@ -45,11 +53,12 @@ class ToolsConfig:
 @dataclass(frozen=True)
 class Config:
     llm: LLMConfig
+    agent: AgentConfig
     tools: ToolsConfig
     source: Path
 
 
-_SECTIONS = {"llm": LLMConfig, "tools": ToolsConfig}
+_SECTIONS = {"llm": LLMConfig, "agent": AgentConfig, "tools": ToolsConfig}
 
 
 def _check_type(section: str, key: str, value: object, type_name: str) -> object:
