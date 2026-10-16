@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>VLSI Design Agent Benchmark</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column (about 68ch) inside a 1000px frame; tables and the run grid use the full frame and scroll sideways on phones. */
+:root {
+  --bg: #f5f7f9;
+  --surface: #ffffff;
+  --ink: #17202a;
+  --muted: #5a6572;
+  --rule: #d8dde3;
+  --accent: #1d5bb8;
+  --code-bg: #edf1f5;
+  --pass: #2e8a4e;
+  --fail: #c2412f;
+  --compile: #c4870f;
+  --nocode: #8f99a3;
+  --add-bg: #dff1e5;
+  --del-bg: #f8e1dd;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161c; --surface: #18202a; --ink: #e3e8ee; --muted: #98a4b0; --rule: #2b3541;
+    --accent: #7ca8ef; --code-bg: #0d1217; --pass: #4bb672; --fail: #e3705d; --compile: #e2a83a;
+    --nocode: #6c7783; --add-bg: #183a25; --del-bg: #44221d; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161c; --surface: #18202a; --ink: #e3e8ee; --muted: #98a4b0; --rule: #2b3541;
+  --accent: #7ca8ef; --code-bg: #0d1217; --pass: #4bb672; --fail: #e3705d; --compile: #e2a83a;
+  --nocode: #6c7783; --add-bg: #183a25; --del-bg: #44221d; color-scheme: dark;
+}
+
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body); }
+.page {
+  max-width: 1000px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+  display: grid; gap: 48px;
+}
+section, header { display: grid; gap: 16px; min-width: 0; }
+.prose { max-width: 68ch; display: grid; gap: 12px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 1.4rem + 2.6vw, 3rem); font-weight: 600; letter-spacing: -0.01em; }
+h2 { font-size: 1.75rem; font-weight: 600; padding-top: 8px; border-top: 2px solid var(--ink); }
+h3 { font-size: 1.2rem; font-weight: 600; margin-top: 8px; }
+p, ol, ul { margin: 0; }
+ol, ul { padding-left: 1.3em; display: grid; gap: 6px; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.lede { font-size: 1.15rem; max-width: 62ch; }
+.meta { color: var(--muted); font-size: 0.9rem; }
+.small { font-size: 0.9rem; color: var(--muted); }
+code, .mono { font-family: var(--mono); font-size: 0.88em; }
+:not(pre) > code { background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+
+.answer { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--accent); padding: 20px 24px; display: grid; gap: 10px; max-width: 78ch; }
+.answer h2 { border: 0; padding: 0; font-size: 1.3rem; }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.figure { background: var(--surface); border: 1px solid var(--rule); padding: 16px; display: grid; gap: 4px; align-content: start; }
+.figure b { font-family: var(--display); font-size: 2rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.figure span { font-size: 0.9rem; color: var(--muted); }
+
+.scroll { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.92rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; white-space: nowrap; }
+thead th { font-family: var(--mono); font-size: 0.72rem; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--ink); }
+td.num, th.num { text-align: right; }
+td.wrap { white-space: normal; min-width: 16ch; }
+tbody th { font-weight: 500; }
+tr.split th { font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); padding-top: 16px; border-bottom: 1px solid var(--rule); }
+.up { color: var(--pass); font-weight: 600; }
+.down { color: var(--fail); font-weight: 600; }
+
+.bar { display: flex; align-items: center; gap: 8px; }
+.bar i { display: block; height: 8px; background: var(--fail); border-radius: 2px; }
+.bar.ok i { background: var(--accent); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 0.88rem; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+table.grid { width: auto; font-size: 0.85rem; }
+table.grid td, table.grid th { padding: 5px 6px; border-bottom: 1px solid var(--rule); }
+table.grid thead th { text-align: center; }
+table.grid thead th:first-child { text-align: left; }
+table.grid th.seed { font-size: 0.7rem; }
+table.grid td.gap, table.grid th.gap { padding: 0 6px; border-bottom: 0; }
+.strip { display: inline-flex; gap: 2px; }
+.cell { width: 12px; height: 12px; border-radius: 2px; position: relative; display: inline-block; }
+.cell.pass { background: var(--pass); }
+.cell.fail { background: var(--fail); }
+.cell.compile-error, .cell.timeout, .cell.error { background: var(--compile); }
+.cell.nocode { box-shadow: inset 0 0 0 2px var(--nocode); }
+.cell.idle { box-shadow: inset 0 0 0 1px var(--rule); }
+.cell.own::after { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--surface); }
+
+.examples { display: grid; gap: 20px; }
+.example { background: var(--surface); border: 1px solid var(--rule); padding: 20px; display: grid; gap: 12px; min-width: 0; }
+.example h3 { margin: 0; }
+.tag { font-family: var(--mono); font-size: 0.78rem; color: var(--muted); }
+.outcome { font-family: var(--mono); font-size: 0.78rem; font-weight: 500; padding: 2px 8px; border-radius: 3px; justify-self: start; border: 1px solid currentColor; }
+.outcome.good { color: var(--pass); }
+.outcome.bad { color: var(--fail); }
+.outcome.note { color: var(--accent); }
+pre { margin: 0; background: var(--code-bg); padding: 12px 14px; overflow-x: auto; font: 0.84rem/1.55 var(--mono); border-radius: 4px; }
+pre .del { display: block; background: var(--del-bg); margin: 0 -14px; padding: 0 14px; }
+pre .add { display: block; background: var(--add-bg); margin: 0 -14px; padding: 0 14px; }
+pre .cm { color: var(--muted); }
+pre.log { border-left: 3px solid var(--fail); }
+
+footer { color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <div class="eyebrow">ECE 425/525 · Course project P04 · VLSI Design Agent</div>
+  <h1>One-shot vs. iterative RTL generation</h1>
+  <p class="lede">We ran the agent 100 times on ten small circuits with a local model, gemma4:26b, and scored every attempt with a hidden reference test. This page reports what revising from tool feedback changed.</p>
+  <p class="meta">Benchmarks run on 15 October 2026 · held-out runs made with the agent frozen at commit <code>99c4655</code></p>
+</header>
+
+<section class="answer" aria-labelledby="answer">
+  <h2 id="answer">The short answer</h2>
+  <p>Revising helped only when the tools named the problem. Across 100 paired runs, revisions fixed 2 designs and broke 1. Both fixes were compile errors that Icarus Verilog reported by line. The one recurring logic bug, a signed comparison computed as unsigned, survived every revision. In the 3 runs that started with it, the agent's own testbench either did not work or made the same mistake, so the feedback never pointed at it.</p>
+  <p>The agent's own checks are the weak link. They rejected 36–81% of designs that were in fact correct. Those correct designs went back for more revisions, so a full iterative run cost 2.2–4.7 times the tokens of its first attempt.</p>
+</section>
+
+<section aria-label="Key figures">
+  <div class="figures">
+    <div class="figure"><b>2 fixed · 1 broken</b><span>designs changed by revisions, over 100 paired runs</span></div>
+    <div class="figure"><b>0 of 3</b><span>runs that started with the signed-compare bug and fixed it</span></div>
+    <div class="figure"><b>36–81%</b><span>correct designs rejected by the agent's own checks</span></div>
+    <div class="figure"><b>2.2–4.7×</b><span>tokens for a full iterative run vs. its first attempt</span></div>
+  </div>
+</section>
+
+<section aria-labelledby="method">
+  <h2 id="method">Method</h2>
+  <div class="prose">
+    <h3>The agent loop</h3>
+    <ol>
+      <li>The model gets the circuit's description and exact module header. It replies with a design and its own self-checking testbench.</li>
+      <li>Development checks run on that reply: compile with Icarus Verilog 12, run the model's testbench, and synthesize with Yosys 0.57, flagging any latches.</li>
+      <li>If a check fails, the model gets the problems as text and tries again, up to 3 attempts. The run stops as soon as its checks pass.</li>
+      <li>After the run, every attempt's design is scored by the circuit's hidden reference test. The model never sees this test or its output, and the loop never uses it.</li>
+    </ol>
+
+    <h3>Paired one-shot and iterative scores</h3>
+    <p>Attempt 1 of a run uses exactly the prompt a one-shot run would use, so each run gives two scores: <b>one-shot</b> is attempt 1's design, <b>iterative</b> is the final design. A run counts as <b>fixed</b> when attempt 1 failed the hidden test and the final design passed, and as <b>broken</b> in the opposite case. Comparing within the same run removes the noise between separate one-shot and iterative runs.</p>
+
+    <h3>Settings</h3>
+    <ul>
+      <li>Model: gemma4:26b (25.2B mixture-of-experts, 4-bit quantized) via Ollama 0.31.2 on one RTX 4090.</li>
+      <li>Temperature 0.2, thinking off, at most 4,096 output tokens per reply, 50,000-token budget per run (no run reached it).</li>
+      <li>Two prompt strategies: <code>default</code>, the starter prompts, and <code>tb_timing</code>, which adds testbench timing advice.</li>
+      <li>Seeds 1–5 per circuit and strategy. Runs with the same seed and prompt repeated exactly, so each seed is one independent sample.</li>
+    </ul>
+  </div>
+
+  <h3>Circuits</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Circuit</th><th>Split</th><th>What it is</th><th class="num">Reference checks</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">adder4</th><td>dev</td><td class="wrap">4-bit adder with carry in and out</td><td class="num">512 (all inputs)</td></tr>
+        <tr><th scope="row">mux2</th><td>dev</td><td class="wrap">2-to-1 multiplexer, 8-bit</td><td class="num">524</td></tr>
+        <tr><th scope="row">counter4</th><td>dev</td><td class="wrap">4-bit counter, synchronous reset, enable</td><td class="num">249</td></tr>
+        <tr><th scope="row">alu4</th><td>dev</td><td class="wrap">4-bit ALU, 8 operations, zero/carry/overflow/negative flags</td><td class="num">2,048 (all inputs)</td></tr>
+        <tr><th scope="row">seqdet_moore</th><td>dev</td><td class="wrap">detects 1011, overlapping, Moore output</td><td class="num">686</td></tr>
+        <tr><th scope="row">adder8</th><td>held-out</td><td class="wrap">8-bit adder with carry in and out</td><td class="num">131,072 (all inputs)</td></tr>
+        <tr><th scope="row">mux4</th><td>held-out</td><td class="wrap">4-to-1 multiplexer, 4-bit</td><td class="num">1,064</td></tr>
+        <tr><th scope="row">updown8</th><td>held-out</td><td class="wrap">8-bit up/down counter, asynchronous active-low reset</td><td class="num">380</td></tr>
+        <tr><th scope="row">alu8</th><td>held-out</td><td class="wrap">8-bit ALU, different operation set incl. arithmetic shift and rotate</td><td class="num">524,288 (all inputs)</td></tr>
+        <tr><th scope="row">seqdet_mealy</th><td>held-out</td><td class="wrap">detects 1101, overlapping, Mealy output, asynchronous reset</td><td class="num">684</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Dev circuits are for developing and comparing strategies. Held-out circuits are kept for the final comparison. Each circuit also has hand-written correct and faulty designs that its reference test must pass and fail.</p>
+    <h3>Order of work</h3>
+    <ol>
+      <li>Difficulty check: one-shot runs on alu4, alu8, seqdet_moore and seqdet_mealy with seeds 101–105, used only to confirm the circuits were hard enough.</li>
+      <li>Dev benchmark: seeds 1–5, both strategies, 50 runs.</li>
+      <li>One extraction bug was fixed (example 5) and the one affected dev run was re-done. The agent's code was then frozen.</li>
+      <li>Held-out benchmark: seeds 1–5, never used on these circuits before, both strategies, 50 runs.</li>
+    </ol>
+  </div>
+</section>
+
+<section aria-labelledby="results">
+  <h2 id="results">Results</h2>
+  <p class="small">Counts are runs that passed the hidden reference test out of runs. "Own checks passed" means the agent's development checks accepted its final design. Tokens are prompt plus output tokens for the whole run.</p>
+
+  <h3>By strategy</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Split / strategy</th><th class="num">One-shot</th><th class="num">Iterative</th><th class="num">Fixed</th><th class="num">Broken</th><th class="num">Pass after 1 / 2 / 3 attempts</th><th class="num">Own checks passed</th><th class="num">Mean attempts</th><th class="num">Mean tokens</th><th class="num">Mean time</th></tr></thead>
+      <tbody>
+        <tr class="split"><th colspan="10">Held-out (final comparison)</th></tr>
+        <tr><th scope="row">default</th><td class="num">22/25</td><td class="num up">24/25</td><td class="num">2</td><td class="num">0</td><td class="num">22 / 24 / 24</td><td class="num">11/25</td><td class="num">2.5</td><td class="num">10,501</td><td class="num">23.7 s</td></tr>
+        <tr><th scope="row">tb_timing</th><td class="num">25/25</td><td class="num">25/25</td><td class="num">0</td><td class="num">0</td><td class="num">25 / 25 / 25</td><td class="num">19/25</td><td class="num">1.6</td><td class="num">6,780</td><td class="num">18.3 s</td></tr>
+        <tr class="split"><th colspan="10">Dev</th></tr>
+        <tr><th scope="row">default</th><td class="num">24/25</td><td class="num">24/25</td><td class="num">0</td><td class="num">0</td><td class="num">24 / 24 / 24</td><td class="num">19/25</td><td class="num">1.7</td><td class="num">7,421</td><td class="num">16.8 s</td></tr>
+        <tr><th scope="row">tb_timing</th><td class="num">23/25</td><td class="num down">22/25</td><td class="num">0</td><td class="num">1</td><td class="num">23 / 22 / 22</td><td class="num">23/25</td><td class="num">1.6</td><td class="num">5,906</td><td class="num">15.9 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>By circuit</h3>
+  <div class="scroll">
+    <table>
+      <thead><tr><th rowspan="2">Circuit</th><th colspan="4">default</th><th colspan="4">tb_timing</th><th class="num" rowspan="2">Median cells (passing)</th></tr>
+      <tr><th class="num">One-shot → iterative</th><th class="num">Own checks</th><th class="num">Attempts</th><th class="num">Tokens</th><th class="num">One-shot → iterative</th><th class="num">Own checks</th><th class="num">Attempts</th><th class="num">Tokens</th></tr></thead>
+      <tbody>
+        <tr class="split"><th colspan="10">Held-out</th></tr>
+        <tr><th scope="row">adder8</th><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.8</td><td class="num">4,388</td><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.0</td><td class="num">1,853</td><td class="num">52</td></tr>
+        <tr><th scope="row">mux4</th><td class="num">3/5 → <span class="up">5/5</span></td><td class="num">5/5</td><td class="num">2.2</td><td class="num">6,345</td><td class="num">5/5 → 5/5</td><td class="num">3/5</td><td class="num">2.0</td><td class="num">5,899</td><td class="num">20 / 15</td></tr>
+        <tr><th scope="row">updown8</th><td class="num">5/5 → 5/5</td><td class="num">0/5</td><td class="num">3.0</td><td class="num">8,551</td><td class="num">5/5 → 5/5</td><td class="num">3/5</td><td class="num">2.0</td><td class="num">8,679</td><td class="num">47</td></tr>
+        <tr><th scope="row">alu8</th><td class="num">4/5 → 4/5</td><td class="num">0/5</td><td class="num">3.0</td><td class="num">21,963</td><td class="num">5/5 → 5/5</td><td class="num">3/5</td><td class="num">1.8</td><td class="num">11,093</td><td class="num">256.5 / 256</td></tr>
+        <tr><th scope="row">seqdet_mealy</th><td class="num">5/5 → 5/5</td><td class="num">1/5</td><td class="num">2.6</td><td class="num">11,255</td><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.4</td><td class="num">6,374</td><td class="num">9</td></tr>
+        <tr class="split"><th colspan="10">Dev</th></tr>
+        <tr><th scope="row">adder4</th><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.4</td><td class="num">2,620</td><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.4</td><td class="num">3,218</td><td class="num">23</td></tr>
+        <tr><th scope="row">mux2</th><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.0</td><td class="num">1,385</td><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.0</td><td class="num">1,671</td><td class="num">8</td></tr>
+        <tr><th scope="row">counter4</th><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.2</td><td class="num">2,077</td><td class="num">5/5 → 5/5</td><td class="num">5/5</td><td class="num">1.0</td><td class="num">1,998</td><td class="num">10</td></tr>
+        <tr><th scope="row">alu4</th><td class="num">4/5 → 4/5</td><td class="num">0/5</td><td class="num">3.0</td><td class="num">23,682</td><td class="num">4/5 → <span class="down">3/5</span></td><td class="num">5/5</td><td class="num">1.8</td><td class="num">9,430</td><td class="num">134</td></tr>
+        <tr><th scope="row">seqdet_moore</th><td class="num">5/5 → 5/5</td><td class="num">4/5</td><td class="num">2.0</td><td class="num">7,341</td><td class="num">4/5 → 4/5</td><td class="num">3/5</td><td class="num">2.6</td><td class="num">13,210</td><td class="num">18</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">Cell counts come from Yosys's generic <code>synth</code> flow and include only designs that pass the hidden test. Where the two strategies differ, both medians are shown (default / tb_timing). They are a rough area measure, not real power, area or timing.</p>
+
+  <h3>Every run, attempt by attempt</h3>
+  <div class="legend" aria-label="Legend">
+    <span><i class="cell pass"></i> passed hidden test</span>
+    <span><i class="cell fail"></i> failed hidden test</span>
+    <span><i class="cell compile-error"></i> did not compile</span>
+    <span><i class="cell pass own"></i> own checks passed here, run stopped</span>
+    <span><i class="cell idle"></i> attempt not needed</span>
+  </div>
+  <p class="small">Each group of three squares is one run (one seed), and each square is one attempt. Hover a square for its exact result.</p>
+  <h3 class="small" style="margin:0">Held-out</h3>
+  <div class="scroll"><table class="grid"><thead><tr><th scope="col">circuit</th><th scope="col" colspan="5">default</th><th class="gap"></th><th scope="col" colspan="5">tb_timing</th></tr>
+<tr><th></th><th scope="col" class="seed">seed 1</th><th scope="col" class="seed">seed 2</th><th scope="col" class="seed">seed 3</th><th scope="col" class="seed">seed 4</th><th scope="col" class="seed">seed 5</th><th class="gap"></th><th scope="col" class="seed">seed 1</th><th scope="col" class="seed">seed 2</th><th scope="col" class="seed">seed 3</th><th scope="col" class="seed">seed 4</th><th scope="col" class="seed">seed 5</th></tr></thead><tbody>
+<tr><th scope="row">adder8</th><td><span class="strip" role="img" aria-label="adder8, default, seed 1: attempt 1: hidden test passed 131072/131072; own checks failed; attempt 2: hidden test passed 131072/131072; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 131072/131072; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, default, seed 2: attempt 1: hidden test passed 131072/131072; own checks failed; attempt 2: hidden test passed 131072/131072; own checks failed; attempt 3: hidden test passed 131072/131072; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 131072/131072; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 131072/131072; own checks failed"></span><span class="cell pass own" title="attempt 3: hidden test passed 131072/131072; own checks passed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, default, seed 3: attempt 1: hidden test passed 131072/131072; own checks failed; attempt 2: hidden test passed 131072/131072; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 131072/131072; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, default, seed 4: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, default, seed 5: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="adder8, tb_timing, seed 1: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, tb_timing, seed 2: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, tb_timing, seed 3: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, tb_timing, seed 4: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder8, tb_timing, seed 5: attempt 1: hidden test passed 131072/131072; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 131072/131072; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">mux4</th><td><span class="strip" role="img" aria-label="mux4, default, seed 1: attempt 1: hidden test did not compile; own checks failed; attempt 2: hidden test passed 1064/1064; own checks passed"><span class="cell compile-error" title="attempt 1: hidden test did not compile; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, default, seed 2: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, default, seed 3: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks failed; attempt 3: hidden test passed 1064/1064; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass own" title="attempt 3: hidden test passed 1064/1064; own checks passed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, default, seed 4: attempt 1: hidden test did not compile; own checks failed; attempt 2: hidden test passed 1064/1064; own checks passed"><span class="cell compile-error" title="attempt 1: hidden test did not compile; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, default, seed 5: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="mux4, tb_timing, seed 1: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks failed; attempt 3: hidden test passed 1064/1064; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 1064/1064; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, tb_timing, seed 2: attempt 1: hidden test passed 1064/1064; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, tb_timing, seed 3: attempt 1: hidden test passed 1064/1064; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, tb_timing, seed 4: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks failed; attempt 3: hidden test passed 1064/1064; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 1064/1064; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="mux4, tb_timing, seed 5: attempt 1: hidden test passed 1064/1064; own checks failed; attempt 2: hidden test passed 1064/1064; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 1064/1064; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 1064/1064; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">updown8</th><td><span class="strip" role="img" aria-label="updown8, default, seed 1: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, default, seed 2: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, default, seed 3: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, default, seed 4: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, default, seed 5: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="updown8, tb_timing, seed 1: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 380/380; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, tb_timing, seed 2: attempt 1: hidden test passed 380/380; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 380/380; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, tb_timing, seed 3: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, tb_timing, seed 4: attempt 1: hidden test passed 380/380; own checks failed; attempt 2: hidden test passed 380/380; own checks failed; attempt 3: hidden test passed 380/380; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 380/380; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 380/380; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="updown8, tb_timing, seed 5: attempt 1: hidden test passed 380/380; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 380/380; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">alu8</th><td><span class="strip" role="img" aria-label="alu8, default, seed 1: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, default, seed 2: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, default, seed 3: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, default, seed 4: attempt 1: hidden test failed 491520/524288; own checks failed; attempt 2: hidden test failed 491520/524288; own checks failed; attempt 3: hidden test failed 491520/524288; own checks failed"><span class="cell fail" title="attempt 1: hidden test failed 491520/524288; own checks failed"></span><span class="cell fail" title="attempt 2: hidden test failed 491520/524288; own checks failed"></span><span class="cell fail" title="attempt 3: hidden test failed 491520/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, default, seed 5: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="alu8, tb_timing, seed 1: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, tb_timing, seed 2: attempt 1: hidden test passed 524288/524288; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524288/524288; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, tb_timing, seed 3: attempt 1: hidden test passed 524288/524288; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524288/524288; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, tb_timing, seed 4: attempt 1: hidden test passed 524288/524288; own checks failed; attempt 2: hidden test passed 524288/524288; own checks failed; attempt 3: hidden test passed 524288/524288; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 524288/524288; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 524288/524288; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu8, tb_timing, seed 5: attempt 1: hidden test passed 524288/524288; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524288/524288; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">seqdet_mealy</th><td><span class="strip" role="img" aria-label="seqdet_mealy, default, seed 1: attempt 1: hidden test passed 684/684; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, default, seed 2: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks failed; attempt 3: hidden test passed 684/684; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 684/684; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, default, seed 3: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks failed; attempt 3: hidden test passed 684/684; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 684/684; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, default, seed 4: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks failed; attempt 3: hidden test passed 684/684; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 684/684; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, default, seed 5: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks failed; attempt 3: hidden test passed 684/684; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 684/684; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 684/684; own checks failed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="seqdet_mealy, tb_timing, seed 1: attempt 1: hidden test passed 684/684; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, tb_timing, seed 2: attempt 1: hidden test passed 684/684; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, tb_timing, seed 3: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, tb_timing, seed 4: attempt 1: hidden test passed 684/684; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_mealy, tb_timing, seed 5: attempt 1: hidden test passed 684/684; own checks failed; attempt 2: hidden test passed 684/684; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 684/684; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 684/684; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+</tbody></table></div>
+  <h3 class="small" style="margin:0">Dev</h3>
+  <div class="scroll"><table class="grid"><thead><tr><th scope="col">circuit</th><th scope="col" colspan="5">default</th><th class="gap"></th><th scope="col" colspan="5">tb_timing</th></tr>
+<tr><th></th><th scope="col" class="seed">seed 1</th><th scope="col" class="seed">seed 2</th><th scope="col" class="seed">seed 3</th><th scope="col" class="seed">seed 4</th><th scope="col" class="seed">seed 5</th><th class="gap"></th><th scope="col" class="seed">seed 1</th><th scope="col" class="seed">seed 2</th><th scope="col" class="seed">seed 3</th><th scope="col" class="seed">seed 4</th><th scope="col" class="seed">seed 5</th></tr></thead><tbody>
+<tr><th scope="row">adder4</th><td><span class="strip" role="img" aria-label="adder4, default, seed 1: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, default, seed 2: attempt 1: hidden test passed 512/512; own checks failed; attempt 2: hidden test passed 512/512; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 512/512; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, default, seed 3: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, default, seed 4: attempt 1: hidden test passed 512/512; own checks failed; attempt 2: hidden test passed 512/512; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 512/512; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, default, seed 5: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="adder4, tb_timing, seed 1: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, tb_timing, seed 2: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, tb_timing, seed 3: attempt 1: hidden test passed 512/512; own checks failed; attempt 2: hidden test passed 512/512; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 512/512; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, tb_timing, seed 4: attempt 1: hidden test passed 512/512; own checks failed; attempt 2: hidden test passed 512/512; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 512/512; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="adder4, tb_timing, seed 5: attempt 1: hidden test passed 512/512; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 512/512; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">mux2</th><td><span class="strip" role="img" aria-label="mux2, default, seed 1: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, default, seed 2: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, default, seed 3: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, default, seed 4: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, default, seed 5: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="mux2, tb_timing, seed 1: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, tb_timing, seed 2: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, tb_timing, seed 3: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, tb_timing, seed 4: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="mux2, tb_timing, seed 5: attempt 1: hidden test passed 524/524; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 524/524; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">counter4</th><td><span class="strip" role="img" aria-label="counter4, default, seed 1: attempt 1: hidden test passed 249/249; own checks failed; attempt 2: hidden test passed 249/249; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 249/249; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, default, seed 2: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, default, seed 3: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, default, seed 4: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, default, seed 5: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="counter4, tb_timing, seed 1: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, tb_timing, seed 2: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, tb_timing, seed 3: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, tb_timing, seed 4: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="counter4, tb_timing, seed 5: attempt 1: hidden test passed 249/249; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 249/249; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">alu4</th><td><span class="strip" role="img" aria-label="alu4, default, seed 1: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks failed; attempt 3: hidden test passed 2048/2048; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 2048/2048; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, default, seed 2: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks failed; attempt 3: hidden test passed 2048/2048; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 2048/2048; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, default, seed 3: attempt 1: hidden test failed 1920/2048; own checks failed; attempt 2: hidden test failed 1920/2048; own checks failed; attempt 3: hidden test failed 1920/2048; own checks failed"><span class="cell fail" title="attempt 1: hidden test failed 1920/2048; own checks failed"></span><span class="cell fail" title="attempt 2: hidden test failed 1920/2048; own checks failed"></span><span class="cell fail" title="attempt 3: hidden test failed 1920/2048; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, default, seed 4: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks failed; attempt 3: hidden test passed 2048/2048; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 2048/2048; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, default, seed 5: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks failed; attempt 3: hidden test passed 2048/2048; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 2048/2048; own checks failed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="alu4, tb_timing, seed 1: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 2048/2048; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, tb_timing, seed 2: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test failed 1920/2048; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell fail own" title="attempt 2: hidden test failed 1920/2048; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, tb_timing, seed 3: attempt 1: hidden test passed 2048/2048; own checks failed; attempt 2: hidden test passed 2048/2048; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 2048/2048; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 2048/2048; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, tb_timing, seed 4: attempt 1: hidden test failed 1920/2048; own checks failed; attempt 2: hidden test failed 1920/2048; own checks passed"><span class="cell fail" title="attempt 1: hidden test failed 1920/2048; own checks failed"></span><span class="cell fail own" title="attempt 2: hidden test failed 1920/2048; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="alu4, tb_timing, seed 5: attempt 1: hidden test passed 2048/2048; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 2048/2048; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td></tr>
+<tr><th scope="row">seqdet_moore</th><td><span class="strip" role="img" aria-label="seqdet_moore, default, seed 1: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks failed; attempt 3: hidden test passed 686/686; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 686/686; own checks failed"></span><span class="cell pass own" title="attempt 3: hidden test passed 686/686; own checks passed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, default, seed 2: attempt 1: hidden test passed 686/686; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 686/686; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, default, seed 3: attempt 1: hidden test passed 686/686; own checks passed"><span class="cell pass own" title="attempt 1: hidden test passed 686/686; own checks passed"></span><span class="cell idle" title="not needed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, default, seed 4: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 686/686; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, default, seed 5: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks failed; attempt 3: hidden test passed 686/686; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 686/686; own checks failed"></span></span></td><td class="gap"></td><td><span class="strip" role="img" aria-label="seqdet_moore, tb_timing, seed 1: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks failed; attempt 3: hidden test passed 686/686; own checks failed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 3: hidden test passed 686/686; own checks failed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, tb_timing, seed 2: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 686/686; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, tb_timing, seed 3: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks failed; attempt 3: hidden test passed 686/686; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass" title="attempt 2: hidden test passed 686/686; own checks failed"></span><span class="cell pass own" title="attempt 3: hidden test passed 686/686; own checks passed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, tb_timing, seed 4: attempt 1: hidden test passed 686/686; own checks failed; attempt 2: hidden test passed 686/686; own checks passed"><span class="cell pass" title="attempt 1: hidden test passed 686/686; own checks failed"></span><span class="cell pass own" title="attempt 2: hidden test passed 686/686; own checks passed"></span><span class="cell idle" title="not needed"></span></span></td><td><span class="strip" role="img" aria-label="seqdet_moore, tb_timing, seed 5: attempt 1: hidden test failed 676/686; own checks failed; attempt 2: hidden test failed 676/686; own checks failed; attempt 3: hidden test failed 676/686; own checks failed"><span class="cell fail" title="attempt 1: hidden test failed 676/686; own checks failed"></span><span class="cell fail" title="attempt 2: hidden test failed 676/686; own checks failed"></span><span class="cell fail" title="attempt 3: hidden test failed 676/686; own checks failed"></span></span></td></tr>
+</tbody></table></div>
+  <div class="prose">
+    <p>The grid shows the pattern behind the totals. Most runs passed the hidden test on attempt 1 and then kept going, because the agent's own checks rejected the design. Few runs change color between attempts.</p>
+  </div>
+</section>
+
+<section aria-labelledby="feedback">
+  <h2 id="feedback">How reliable was the agent's own feedback?</h2>
+  <div class="prose">
+    <p>Every attempt that produced code was judged twice: by the agent's own development checks and by the hidden reference test. The two disagree in two ways. A correct design that fails the agent's checks gets revised anyway. A wrong design that passes them ends the run with a wrong answer.</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Split / strategy</th><th>Correct designs rejected by own checks</th><th class="num">Wrong designs accepted</th><th class="num">Tokens: attempt 1 → whole run</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">dev / default</th><td><span class="bar"><i style="width:52px"></i>21 of 40 (52%)</span></td><td class="num">0 of 3</td><td class="num">2,111 → 7,421 (3.5×)</td></tr>
+        <tr><th scope="row">dev / tb_timing</th><td><span class="bar"><i style="width:36px"></i>12 of 33 (36%)</span></td><td class="num down">2 of 6</td><td class="num">2,577 → 5,906 (2.3×)</td></tr>
+        <tr><th scope="row">held-out / default</th><td><span class="bar"><i style="width:81px"></i>47 of 58 (81%)</span></td><td class="num">0 of 5</td><td class="num">2,252 → 10,501 (4.7×)</td></tr>
+        <tr><th scope="row">held-out / tb_timing</th><td><span class="bar"><i style="width:54px"></i>22 of 41 (54%)</span></td><td class="num">none to accept</td><td class="num">3,041 → 6,780 (2.2×)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Bar length is the rejection rate, at 1 pixel per percent. The cases we inspected traced false rejections to the testbenches. Some compared outputs before they settled or saw every output as <code>x</code>, some compared against wrong expected values, some failed to compile, and some never printed a result line.</p>
+    <p>tb_timing rejected fewer correct designs and used fewer tokens, but its testbenches failed to compile in 10 of 39 dev attempts against 0 of 43 for default, and it was the only strategy whose checks accepted a wrong design. Over both splits the two strategies are close: default 46/50 one-shot and 48/50 iterative, tb_timing 48/50 and 47/50.</p>
+  </div>
+</section>
+
+<section aria-labelledby="examples">
+  <h2 id="examples">Examples</h2>
+  <div class="examples">
+
+    <article class="example">
+      <span class="outcome good">fixed by revision</span>
+      <h3>1. A compile error the tools named</h3>
+      <div class="tag">mux4 · default · held-out seed 1 (seed 4 was the same)</div>
+      <p>The design assigned to <code>y</code> inside an <code>always</code> block but declared it as a plain output, so Icarus Verilog stopped:</p>
+      <pre class="log">design.v:12: error: y is not a valid l-value in mux4.</pre>
+      <p>That line went back to the model, which changed one declaration. Attempt 2 passed the hidden test, 1064/1064.</p>
+      <pre><span class="del">-    output [3:0] y</span><span class="add">+    output reg [3:0] y</span></pre>
+    </article>
+
+    <article class="example">
+      <span class="outcome bad">never fixed</span>
+      <h3>2. A logic bug no revision touched</h3>
+      <div class="tag">alu8 · default · held-out seed 4</div>
+      <p>The specification defines SLT as a signed comparison. The model sign-extended both operands and compared them with <code>&lt;</code>:</p>
+      <pre>wire [8:0] sa = {a[7], a};
+wire [8:0] sb = {b[7], b};
+...
+3'b111: y_reg = (sa &lt; sb) ? 8'h01 : 8'h00;   <span class="cm">// SLT</span></pre>
+      <p>Sign extension does not make <code>&lt;</code> signed. Both vectors are still unsigned, so b = −128 becomes <code>9'h180</code>, which compares as larger than 0. The correct form is <code>$signed(a) &lt; $signed(b)</code>. The hidden test caught it:</p>
+      <pre class="log">MISMATCH op=111 a=0 b=128: expected y=0 zero=1 carry=0 overflow=0 negative=0, got y=1 zero=0 ...</pre>
+      <p>The model's own testbench reported 0/23 checks passed with every output shown as <code>x</code>, so its feedback said nothing useful about SLT. All three attempts kept the same comparison.</p>
+    </article>
+
+    <article class="example">
+      <span class="outcome bad">accepted a wrong design</span>
+      <h3>3. A testbench with the same mistake</h3>
+      <div class="tag">alu4 · tb_timing · dev seed 4, attempt 2</div>
+      <p>Here the design and the testbench's reference model used the identical comparison. The testbench's comment states the intended result, but its model computes the opposite, the design agrees with the model, and the agent's checks pass.</p>
+      <pre><span class="cm">// design</span>
+3'b111: if ({a[3], a} &lt; {b[3], b}) y_reg = 4'h1; else ...
+<span class="cm">// testbench reference model</span>
+3'b111: if ({a[3], a} &lt; {b[3], b}) m_y = 4'h1; else m_y = 4'h0;
+<span class="cm">// testbench stimulus</span>
+op = 3'b111; a = 4'b1111; b = 4'b0001; #1; update_model(); check(); <span class="cm">// -1 &lt; 1 -&gt; 1</span></pre>
+      <p>By its own checks the run ended in success. The hidden test failed it, 1920/2048. The project proposal named this as its biggest risk: generated RTL and a generated testbench sharing one misunderstanding.</p>
+    </article>
+
+    <article class="example">
+      <span class="outcome bad">broken by revision</span>
+      <h3>4. A revision that broke a correct design</h3>
+      <div class="tag">alu4 · tb_timing · dev seed 2</div>
+      <p>Attempt 1 compared correctly through signed wires and passed the hidden test, 2048/2048. Its testbench did not compile, because it wrote negative constants as <code>4'd-1</code> instead of <code>-4'd1</code>. Asked to fix the problems, the model rewrote both files. The new design used the unsigned comparison from example 3, and the new testbench agreed with it.</p>
+      <pre><span class="del">-    y_reg = (a_s &lt; b_s) ? 4'b0001 : 4'b0000;   // a_s, b_s are wire signed</span><span class="add">+    if ({a[3], a} &lt; {b[3], b}) y_reg = 4'b0001;</span></pre>
+      <p>The agent's checks passed and the run stopped. The hidden test scored the final design 1920/2048.</p>
+    </article>
+
+    <article class="example">
+      <span class="outcome note">tooling bug, now fixed</span>
+      <h3>5. A bug in our own extractor</h3>
+      <div class="tag">alu4 · default · dev seed 1</div>
+      <p>In one reply the model rewrote <code>module alu4</code> five times and was cut off at the 4,096-token limit. Our extractor joined every version into one file, which failed to compile:</p>
+      <pre class="log">design.v:90: error: 'alu4' has already been declared in this scope.</pre>
+      <p>In the first dev run this looked like iteration fixing a compile error. The extractor now keeps the last complete definition of a repeated module (commit <code>2fcb7fb</code>). With that change the reply's final version passes the hidden test, and the dev result for default became 24/25 one-shot and 24/25 iterative, with nothing fixed. This was the only run affected.</p>
+    </article>
+  </div>
+</section>
+
+<section aria-labelledby="calibration">
+  <h2 id="calibration">Difficulty check</h2>
+  <div class="prose">
+    <p>The first six circuits turned out too easy: the model passed nearly all of them in one shot, which would leave nothing for iteration to improve. Four harder circuits were added and checked with one-shot runs on seeds 101–105, before any benchmark.</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Circuit</th><th>Split</th><th class="num">One-shot passes</th><th>Failures</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">alu4</th><td>dev</td><td class="num">2/5</td><td class="wrap">3 × SLT compared as unsigned</td></tr>
+        <tr><th scope="row">alu8</th><td>held-out</td><td class="num">4/5</td><td class="wrap">1 × SLT compared as unsigned</td></tr>
+        <tr><th scope="row">seqdet_moore</th><td>dev</td><td class="num">5/5</td><td class="wrap">none</td></tr>
+        <tr><th scope="row">seqdet_mealy</th><td>held-out</td><td class="num">4/5</td><td class="wrap">1 × syntax error</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small">The model's own testbench passed in only 2 of these 20 runs, although 15 of the 20 designs were correct. That was the first sign of the false-rejection problem.</p>
+</section>
+
+<section aria-labelledby="caveats">
+  <h2 id="caveats">Caveats</h2>
+  <div class="prose">
+    <ul>
+      <li><b>Small samples.</b> Each strategy has 25 runs per split, so differences of 1–3 runs are within noise. For example, 22/25 vs. 25/25 one-shot on the held-out set gives p ≈ 0.23 with Fisher's exact test.</li>
+      <li><b>One logic bug dominates.</b> 4 runs hit the SLT bug: 3 started with it and kept it, and in 1 a revision introduced it. "Iteration never fixed a logic bug" rests mostly on that one bug type.</li>
+      <li><b>One model and one setting.</b> All runs use gemma4:26b at temperature 0.2. Other models, or a higher temperature, may revise differently.</li>
+      <li><b>Small circuits.</b> At most 8 bits and 5 states. Larger designs give the tools more to report and the model more to get wrong.</li>
+      <li><b>Strategies change the first prompt too.</b> tb_timing's one-shot results differ from default's because its prompt differs, so the strategy comparison is not a pure test of feedback.</li>
+      <li><b>Bounded evidence.</b> Reference tests are exhaustive for the combinational circuits and directed plus random for the sequential ones. Passing them is strong evidence, not proof.</li>
+      <li><b>Held-out circuits seen once before.</b> The difficulty check ran one-shot on alu8 and seqdet_mealy with different seeds (101–105). No strategy was tuned on them.</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="next">
+  <h2 id="next">What to try next</h2>
+  <div class="prose">
+    <ul>
+      <li><b>Spec-first testbench.</b> Have the model write the testbench, with its own reference model, from the specification in a separate call before it writes the design. That keeps the testbench from copying the design's misunderstanding, which caused examples 3 and 4.</li>
+      <li><b>Stop when nothing changes.</b> Many runs returned the same design on every attempt while only the testbench changed. Stopping when the design repeats would save most of the extra tokens.</li>
+      <li><b>More kinds of failure.</b> Add the planned FIFO pair (pointer wrap-around, full and empty flags) so results do not hinge on the SLT bug.</li>
+      <li><b>More samples.</b> More seeds per circuit, and a second model, to tell small differences from noise.</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="reproduce">
+  <h2 id="reproduce">Reproduce</h2>
+  <div class="prose">
+    <p>From the project folder inside WSL, with the agent at commit <code>99c4655</code> or later:</p>
+  </div>
+  <pre>vlsi-agent bench --split dev --seeds 1-5 \
+    --prompts prompts/default prompts/examples/tb_timing --out runs/bench/dev-seeds1-5
+vlsi-agent bench --split heldout --seeds 1-5 \
+    --prompts prompts/default prompts/examples/tb_timing --out runs/bench/heldout-seeds1-5</pre>
+  <div class="prose">
+    <p>Each benchmark folder holds <code>summary.md</code>, <code>rows.csv</code>, and every run's files: the model's replies, the designs and testbenches, the feedback it received, and the hidden test's log for each attempt.</p>
+  </div>
+</section>
+
+<footer>Numbers on this page come from <code>runs/bench/dev-seeds1-5</code> and <code>runs/bench/heldout-seeds1-5</code>. The run grid is generated from each run's <code>history.json</code>.</footer>
+</div>
+</body>
+</html>

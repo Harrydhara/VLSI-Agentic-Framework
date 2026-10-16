@@ -87,6 +87,10 @@ compile and synthesis success, tokens, time, and cell counts for passing designs
 Tune strategies on `dev`. Use `heldout` once, for the final comparison, with seeds you
 did not use while tuning.
 
+**Results so far:** [`docs/benchmark-report.html`](docs/benchmark-report.html) (open it in a
+browser) reports the first full benchmark: 100 gemma4:26b runs, one-shot vs. iterative,
+with method, tables, how reliable the agent's own checks were, examples and caveats.
+
 ## Changing the strategy
 
 The prompts are plain text in `prompts/default/` (`system.txt`, `task.txt`,
@@ -145,5 +149,6 @@ design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 | `src/vlsi_agent/prompts.py` | Loads and fills the prompt templates |
 | `prompts/default/` | The starter agent's prompts |
 | `examples/` | Scripted replies for running without a GPU |
+| `docs/` | Reports, e.g. `benchmark-report.html` |
 | `circuits/` | Circuit specs, reference tests and fixtures |
 | `tests/` | pytest tests |
