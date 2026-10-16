@@ -16,7 +16,7 @@ from vlsi_agent.circuits import CircuitError, get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config, project_path
 from vlsi_agent.evaluate import reference_test
 from vlsi_agent.llm import FakeLLM, LLMError, Message, OllamaLLM
-from vlsi_agent.prompts import PromptError, load_prompts
+from vlsi_agent.prompts import PromptError, load_strategy
 
 RUNS_DIR = PROJECT_ROOT / "runs"
 
@@ -138,19 +138,37 @@ def _checks_text(e: dict) -> str:
     return ", ".join(parts)
 
 
+def _who(e: dict) -> str:
+    """Which step an event belongs to: 'attempt 2', 'testbench', 'attempt 2: testbench review'."""
+    role, n = e.get("role", "design"), e.get("attempt")
+    if role == "design":
+        return f"attempt {n}"
+    label = role.replace("_", " ")
+    return f"attempt {n}: {label}" if n else label
+
+
 def print_event(e: dict) -> None:
     kind, n = e["event"], e.get("attempt")
     lines = {
         "run_started": lambda: f"{e['circuit']} ({e['split']}) with {e['model']}: up to {e['max_attempts']} "
-                               f"attempt(s), budget {e['max_total_tokens']} tokens",
-        "model_called": lambda: f"attempt {n}: asking the model...",
-        "model_replied": lambda: f"attempt {n}: reply of {e['output_tokens']} tokens in {e['duration_s']:.1f} s"
+                               f"attempt(s), budget {e['max_total_tokens']} tokens"
+                               + (", testbench written first from the spec" if e.get("workflow") == "spec_first"
+                                  else ""),
+        "model_called": lambda: f"{_who(e)}: asking the model...",
+        "model_replied": lambda: f"{_who(e)}: reply of {e['output_tokens']} tokens in {e['duration_s']:.1f} s"
                                  + (" (cut off at the token limit)" if e["truncated"] else ""),
+        "testbench_checked": lambda: f"testbench version {e['version']}: "
+                                     + ("usable" if e["usable"] else "not usable, asking for a fix"),
+        "testbench_unusable": lambda: f"no usable testbench after {e['tries']} tries; "
+                                      "checking compile and synthesis only",
+        "testbench_confirmed": lambda: f"attempt {n}: the testbench's author confirmed the failed checks",
+        "testbench_revised": lambda: f"attempt {n}: the testbench's author corrected the testbench; checking again",
+        "testbench_revision_rejected": lambda: f"attempt {n}: the corrected testbench was not usable; keeping the old one",
         "checks_done": lambda: f"attempt {n}: development checks {'PASSED' if e['passed'] else 'FAILED'} "
-                               f"({_checks_text(e)})",
+                               f"({_checks_text(e)})" + (" after the testbench fix" if e.get("recheck") else ""),
         "feedback_sent": lambda: f"attempt {n}: sent the check results back to the model ({e['chars']} chars)",
         "budget_exhausted": lambda: f"token budget used up ({e['used']}/{e['budget']}), stopping",
-        "model_error": lambda: f"attempt {n}: model error: {e['error']}",
+        "model_error": lambda: f"{_who(e)}: model error: {e['error']}",
         "reference_scored": lambda: f"hidden reference test on attempt {n}: {e['outcome'].upper()}"
                                     + (f" {e['passed']}/{e['total']}" if e["total"] else "")
                                     + ("" if e["final"] else " (earlier attempt, for comparison)"),
@@ -210,7 +228,7 @@ def cmd_bench(config: Config, args: argparse.Namespace) -> int:
 
     folders = [p.resolve() for p in args.prompts] if args.prompts else [project_path(config.agent.prompts_dir)]
     for folder in folders:
-        load_prompts(folder)  # fail now, not halfway through the benchmark
+        load_strategy(folder)  # fail now, not halfway through the benchmark
     names = [f.name for f in folders]
     strategies = dict(zip(names if len(set(names)) == len(names) else [str(f) for f in folders], folders))
 

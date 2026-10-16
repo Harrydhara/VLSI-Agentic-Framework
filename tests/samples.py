@@ -25,6 +25,14 @@ module tb;
 endmodule"""
 
 
+TB_FORGETS_CIN = TB.replace("{cout, sum} === a + b + cin", "{cout, sum} === a + b")  # a wrong testbench
+
+
+def block(code: str) -> str:
+    """A model reply with one Verilog code block."""
+    return f"Here it is:\n```verilog\n{code}\n```\n"
+
+
 def reply(design: str, testbench: str | None = TB) -> str:
     """A model reply in the requested format: design block, then testbench block."""
     text = f"Here is the design:\n```verilog\n{design}\n```\n"

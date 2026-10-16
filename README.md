@@ -98,6 +98,12 @@ The prompts are plain text in `prompts/default/` (`system.txt`, `task.txt`,
 `--prompts <folder>` (or set `prompts_dir` in a config copy). A misspelled placeholder
 is reported before any model call.
 
+A strategy folder can also change the workflow with a `strategy.toml`.
+[`prompts/examples/spec_first/`](prompts/examples/spec_first/README.md) uses
+`workflow = "spec_first"`: the testbench is written from the specification in its own
+conversation before any design exists, the design is written in a second conversation,
+and failed checks go to the testbench's author for review before the design is revised.
+
 ## Circuits and reference tests
 
 Each circuit has a folder in `circuits/`:

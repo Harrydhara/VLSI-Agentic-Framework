@@ -3,8 +3,10 @@ import dataclasses
 import pytest
 
 from samples import ADDER, ADDER_NO_CARRY, TB
+from vlsi_agent.circuits import get_circuit
 from vlsi_agent.config import load_config
-from vlsi_agent.devcheck import Sources, run_dev_checks, separate, split_modules
+from vlsi_agent.devcheck import (Sources, check_testbench, failure_lines, placeholder_design, run_dev_checks,
+                                 separate, split_modules)
 
 TOOLS = dataclasses.replace(load_config().tools, sim_timeout_s=2)
 
@@ -54,9 +56,51 @@ def test_no_testbench():
     assert src.testbench is None and "module adder4" in src.design
 
 
+def test_placeholder_design_ties_every_output_to_zero():
+    text = placeholder_design(get_circuit("adder4").spec)
+    assert text.startswith("module adder4(") and text.rstrip().endswith("endmodule")
+    assert "assign sum = 4'd0;" in text and "assign cout = 1'd0;" in text
+    assert "assign a" not in text  # inputs are left alone
+
+
+def test_failure_lines_keeps_fail_and_result_lines():
+    output = "hello\nFAIL: a=1 got 0\nnoise\n  FAIL: a=2 got 0\nRESULT: 3/5 passed\ntb.v:9: $finish called at 5\n"
+    assert failure_lines(output) == "FAIL: a=1 got 0\nFAIL: a=2 got 0\nRESULT: 3/5 passed"
+    many = "".join(f"FAIL: case {i}\n" for i in range(30)) + "RESULT: 0/30 passed\n"
+    lines = failure_lines(many, limit=5).splitlines()
+    assert lines[:4] == [f"FAIL: case {i}" for i in range(4)]
+    assert lines[4] == "... (27 more)" and lines[-1] == "RESULT: 0/30 passed"
+
+
 # --------------------------------------------------------------- checks (real tools)
 
 integration = pytest.mark.integration
+
+
+@integration
+def test_good_testbench_is_usable_against_the_placeholder(tmp_path):
+    check = check_testbench(TOOLS, tmp_path, get_circuit("adder4").spec, TB + "\n")
+    assert check.ok and check.feedback == ""
+    assert check.sim.total == 512 and check.sim.passed < 512  # the placeholder fails, which is fine
+
+
+@integration
+@pytest.mark.parametrize("broken,expected", [
+    (TB.replace("integer i,", "integer i"), "The testbench does not compile"),
+    (TB.replace(".cout(cout)", ".carry(cout)"), "The testbench does not compile"),
+    (TB.replace("$finish;", "").replace("initial begin", "always #5 a = a; initial begin"), "did not finish within 2 s"),
+    (TB.replace('$display("RESULT: %0d/%0d passed", passed, total);', ""), 'printed no "RESULT'),
+    (None, "No testbench module named tb"),
+])
+def test_unusable_testbench_is_explained(tmp_path, broken, expected):
+    check = check_testbench(TOOLS, tmp_path, get_circuit("adder4").spec, broken)
+    assert not check.ok and expected in check.feedback
+
+
+@integration
+def test_missing_testbench_can_be_allowed(tmp_path):
+    report = run_dev_checks(TOOLS, tmp_path, separate(ADDER, "adder4"), "adder4", require_testbench=False)
+    assert report.passed and report.sim is None and report.synth.ok
 
 
 @integration

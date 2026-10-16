@@ -16,11 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from vlsi_agent import eda
+from vlsi_agent.circuits import Spec
 from vlsi_agent.config import ToolsConfig
 
 DESIGN_FILE = "design.v"
 TESTBENCH_FILE = "tb.v"
 TESTBENCH_TOP = "tb"
+PLACEHOLDER_FILE = "placeholder.v"
 
 _MODULE = re.compile(r"\bmodule\s+([A-Za-z_][A-Za-z0-9_$]*)\b.*?\bendmodule\b", re.DOTALL)
 _SIM_NOISE = re.compile(r"\$finish called at|^VCD info:|^VCD warning:")
@@ -96,9 +98,66 @@ def _cap(text: str, max_chars: int) -> str:
     return text[:max_chars].rstrip() + f"\n... (feedback cut to {max_chars} characters)"
 
 
+def failure_lines(sim_output: str, limit: int = 20) -> str:
+    """The FAIL: and RESULT: lines of a testbench run (the checks a design failed)."""
+    lines = [line.strip() for line in sim_output.splitlines() if line.lstrip().startswith(("FAIL", "RESULT:"))]
+    if not lines:
+        return _excerpt(sim_output, limit)
+    if len(lines) > limit:
+        lines = lines[:limit - 1] + [f"... ({len(lines) - limit + 1} more)"] + lines[-1:]
+    return "\n".join(lines)
+
+
+def placeholder_design(spec: Spec) -> str:
+    """A module with the spec's exact header whose outputs are all 0, for checking a testbench."""
+    body = "".join(f"  assign {p.name} = {p.width}'d0;\n" for p in spec.ports if p.direction == "output")
+    return f"{spec.interface()}\n{body}endmodule\n"
+
+
+@dataclass(frozen=True)
+class TbCheck:
+    ok: bool
+    feedback: str  # what the testbench's author is told; empty when the testbench is usable
+    compile: eda.CompileResult | None
+    sim: eda.SimResult | None
+
+
+def check_testbench(tools: ToolsConfig, workdir: Path, spec: Spec, testbench: str | None,
+                    max_chars: int = 3000) -> TbCheck:
+    """Check that a testbench compiles against the spec's header, finishes, and prints a
+    RESULT line. It runs against a placeholder whose outputs are all 0, so failed checks
+    are expected and do not matter here."""
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    if not testbench:
+        return TbCheck(False, "- No testbench module named tb was found in your reply.", None, None)
+    (workdir / PLACEHOLDER_FILE).write_text(placeholder_design(spec))
+    (workdir / TESTBENCH_FILE).write_text(testbench)
+
+    comp = eda.compile_verilog(tools, workdir, [PLACEHOLDER_FILE, TESTBENCH_FILE], top=TESTBENCH_TOP)
+    if not comp.ok:
+        return TbCheck(False, _cap(f"- The testbench does not compile:\n{_diagnostics(comp)}", max_chars),
+                              comp, None)
+    sim = eda.simulate(tools, workdir)
+    (workdir / "sim.log").write_text(sim.run.output)
+    if sim.run.timed_out:
+        problem = (f"- The testbench did not finish within {tools.sim_timeout_s:g} s. It must always reach "
+                   "$finish, even when the design's outputs never change.")
+    elif not sim.completed:
+        problem = f"- The simulator stopped with exit code {sim.run.returncode}:\n{_excerpt(sim.run.output)}"
+    elif sim.total is None:
+        problem = ('- The testbench printed no "RESULT: <passed>/<total> passed" line.\n'
+                   f"Simulation output:\n{_excerpt(sim.run.output)}")
+    else:
+        return TbCheck(True, "", comp, sim)
+    return TbCheck(False, _cap(problem, max_chars), comp, sim)
+
+
 def run_dev_checks(tools: ToolsConfig, workdir: Path, sources: Sources, top: str,
-                   max_chars: int = 3000) -> DevReport:
-    """Write design.v / tb.v into workdir, run the checks, and describe any problems."""
+                   max_chars: int = 3000, require_testbench: bool = True) -> DevReport:
+    """Write design.v / tb.v into workdir, run the checks, and describe any problems.
+    With require_testbench=False a missing testbench is not a problem (compile and
+    synthesis checks only)."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     (workdir / DESIGN_FILE).write_text(sources.design)
@@ -120,8 +179,9 @@ def run_dev_checks(tools: ToolsConfig, workdir: Path, sources: Sources, top: str
 
     if comp is not None and comp.ok:
         if not sources.testbench:
-            problems.append("No testbench was found. Include a module named tb that checks the design "
-                            'and ends with $display("RESULT: %0d/%0d passed", passed, total); $finish;')
+            if require_testbench:
+                problems.append("No testbench was found. Include a module named tb that checks the design "
+                                'and ends with $display("RESULT: %0d/%0d passed", passed, total); $finish;')
         else:
             tb_comp = eda.compile_verilog(tools, workdir, [DESIGN_FILE, TESTBENCH_FILE], top=TESTBENCH_TOP)
             (workdir / "tb_compile.log").write_text(tb_comp.run.output)

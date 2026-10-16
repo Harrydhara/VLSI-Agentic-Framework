@@ -4,25 +4,56 @@ import pytest
 
 from vlsi_agent.circuits import get_circuit
 from vlsi_agent.config import PROJECT_ROOT
-from vlsi_agent.prompts import PromptError, load_prompts, render
+from vlsi_agent.prompts import PromptError, load_prompts, load_strategy, render, workflow_of
 
 DEFAULT = PROJECT_ROOT / "prompts" / "default"
-ALL_FOLDERS = sorted(p.parent for p in (PROJECT_ROOT / "prompts").rglob("system.txt"))
+SPEC_FIRST = PROJECT_ROOT / "prompts" / "examples" / "spec_first"
+ALL_FOLDERS = sorted({p.parent for name in ("system.txt", "strategy.toml")
+                      for p in (PROJECT_ROOT / "prompts").rglob(name)})
 
 
 def test_shipped_strategies_are_found():
     names = [str(f.relative_to(PROJECT_ROOT / "prompts")).replace("\\", "/") for f in ALL_FOLDERS]
-    assert "default" in names and "examples/tb_timing" in names
+    assert {"default", "examples/tb_timing", "examples/spec_first"} <= set(names)
 
 
 @pytest.mark.parametrize("folder", ALL_FOLDERS, ids=lambda p: p.name)
-def test_every_prompts_folder_loads_and_renders(folder):
-    prompts = load_prompts(folder)
+def test_every_strategy_loads_and_renders(folder):
+    strategy = load_strategy(folder)
     spec = get_circuit("counter4").spec
-    task = prompts.task_message(spec)
+    if strategy.workflow == "single":
+        task = strategy.task_message(spec)
+        assert "- a failed check" in strategy.feedback_message(2, 3, "- a failed check")
+        testbench_rules = strategy.system
+    else:
+        task = strategy.design_task_message(spec)
+        assert spec.interface() in strategy.tb_task_message(spec)
+        assert "- a failed check" in strategy.design_feedback_message(2, 3, "- a failed check")
+        assert "bad port" in strategy.tb_fix_message("bad port")
+        assert "FAIL: x" in strategy.tb_review_message("FAIL: x")
+        testbench_rules = strategy.tb_system
     assert spec.description in task and spec.interface() in task
-    assert "- a failed check" in prompts.feedback_message(2, 3, "- a failed check")
-    assert "RESULT: %0d/%0d passed" in prompts.system  # the dev checks depend on this line
+    assert "RESULT: %0d/%0d passed" in testbench_rules  # the dev checks depend on this line
+
+
+def test_workflow_is_read_from_strategy_toml(tmp_path):
+    assert workflow_of(DEFAULT) == "single" and workflow_of(SPEC_FIRST) == "spec_first"
+    folder = tmp_path / "mine"
+    shutil.copytree(SPEC_FIRST, folder)
+    (folder / "strategy.toml").write_text('workflow = "ping_pong"\n')
+    with pytest.raises(PromptError, match="workflow must be one of"):
+        load_strategy(folder)
+    (folder / "strategy.toml").write_text('workflow = "spec_first"\ncolour = "blue"\n')
+    with pytest.raises(PromptError, match=r"unknown key\(s\): colour"):
+        load_strategy(folder)
+
+
+def test_spec_first_folder_needs_all_its_files(tmp_path):
+    folder = tmp_path / "mine"
+    shutil.copytree(SPEC_FIRST, folder)
+    (folder / "tb_review.txt").unlink()
+    with pytest.raises(PromptError, match="missing prompt file: .*tb_review.txt"):
+        load_strategy(folder)
 
 
 def test_render_replaces_placeholders_and_leaves_verilog_braces_alone():
