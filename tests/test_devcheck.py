@@ -98,6 +98,17 @@ def test_unusable_testbench_is_explained(tmp_path, broken, expected):
 
 
 @integration
+def test_testbench_that_miscounts_is_still_usable(tmp_path):
+    # Counts failures several times per check, so against the all-zero placeholder it
+    # prints a negative pass count. It still compiles, finishes and reports a result.
+    miscounting = TB.replace('$display("RESULT: %0d/%0d passed", passed, total);',
+                             '$display("RESULT: %0d/%0d passed", passed - 3 * (total - passed), total);')
+    check = check_testbench(TOOLS, tmp_path, get_circuit("adder4").spec, miscounting)
+    assert check.ok
+    assert check.sim.passed < 0 and not check.sim.all_passed
+
+
+@integration
 def test_missing_testbench_can_be_allowed(tmp_path):
     report = run_dev_checks(TOOLS, tmp_path, separate(ADDER, "adder4"), "adder4", require_testbench=False)
     assert report.passed and report.sim is None and report.synth.ok

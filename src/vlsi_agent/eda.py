@@ -42,7 +42,9 @@ SYNTH_STAT_NAME = "synth_stat.json"
 
 _SAFE_FILE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-/]*$")
 _SAFE_MODULE = re.compile(r"^[A-Za-z_][A-Za-z0-9_$]*$")
-_RESULT_LINE = re.compile(r"^RESULT(?: (?P<token>\S+))?: (?P<passed>\d+)/(?P<total>\d+) passed\s*$",
+# passed may be negative: generated testbenches sometimes miscount (e.g. passed = total - errors,
+# with several errors per check). Such a line still counts as a result, and never as a pass.
+_RESULT_LINE = re.compile(r"^RESULT(?: (?P<token>\S+))?: (?P<passed>-?\d+)/(?P<total>\d+) passed\s*$",
                           re.MULTILINE)
 _DIAGNOSTIC = re.compile(
     r"^(?P<file>[^\s:][^:]*):(?P<line>\d+):\s*(?:(?P<severity>error|warning|sorry):\s*)?(?P<message>.+)$"

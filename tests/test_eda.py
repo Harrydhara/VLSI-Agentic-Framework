@@ -108,6 +108,13 @@ def test_parse_result_line_uses_the_last_one():
     assert eda.parse_result_line("no summary here") == (None, None)
 
 
+def test_negative_pass_count_is_still_a_result_line():
+    assert eda.parse_result_line("RESULT: -15/23 passed\n") == (-15, 23)
+    run = eda.ToolRun(("vvp",), 0, "RESULT: -15/23 passed\n", 0.1, False, False)
+    sim = eda.SimResult(True, -15, 23, (), run)
+    assert not sim.all_passed
+
+
 def test_parse_result_line_with_token_only_trusts_that_token():
     output = "RESULT: 9/9 passed\nRESULT abc123: 2/9 passed\nRESULT other: 9/9 passed\n"
     assert eda.parse_result_line(output, token="abc123") == (2, 9)
