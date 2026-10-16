@@ -60,10 +60,13 @@ the model to use only standard Verilog-2005 system tasks.
 
 | | default | tb_timing |
 |---|---|---|
-| One-shot / iterative reference pass | 23/25 -> 24/25 | 23/25 -> 22/25 |
-| Revisions that fixed / broke a design | 1 / 0 | 0 / 1 |
+| One-shot / iterative reference pass | 24/25 -> 24/25 | 23/25 -> 22/25 |
+| Revisions that fixed / broke a design | 0 / 0 | 0 / 1 |
 | Testbench did not compile (all attempts) | 0 of 43 | 10 of 39 |
-| Mean tokens per run | 7,320 | 5,906 |
+| Mean tokens per run | 7,421 | 5,906 |
+
+(Default numbers are after the fix that keeps a repeated module's last definition;
+before it, one default run counted as "fixed" only because of that extraction bug.)
 
 **No improvement, and a new failure mode.** The extra guidance made the model write more
 ambitious tests, for example signed comparisons, but with invalid Verilog: `4'd-1`
