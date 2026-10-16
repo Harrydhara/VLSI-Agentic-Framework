@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from samples import ADDER, ADDER_NO_CARRY, reply
+from samples import ADDER, ADDER_NO_CARRY, TB, reply
 from vlsi_agent.agent import STATUSES, run_agent
 from vlsi_agent.circuits import OUTCOMES, get_circuit
 from vlsi_agent.config import PROJECT_ROOT, load_config
@@ -114,7 +114,71 @@ def test_run_folder_has_events_history_and_attempt_files(tmp_path):
                                     "detail": "512/512 checks passed"}
     for name in ("response.md", "design.v", "tb.v", "feedback.txt", "sim.log"):
         assert (result.run_dir / "attempt_1" / name).is_file(), name
-    assert (result.run_dir / "reference" / "design.v").is_file()
+    assert [p.name for p in (result.run_dir / "reference").iterdir()] == ["attempt_2"]  # only the final design
+    assert (result.run_dir / "reference" / "attempt_2" / "design.v").is_file()
+    assert history["attempts"][0]["reference"] is None
+    assert history["attempts"][1]["reference"] == {"outcome": "pass", "passed": 512, "total": 512}
+
+
+TB_WRONG_EXPECTATION = TB.replace("{cout, sum} === a + b + cin", "{cout, sum} === a + b")  # forgets cin
+TB_SUM_ONLY = TB.replace("{cout, sum} === a + b + cin", "sum === a + b + cin")  # never checks cout
+
+
+class ReferenceWatcher(FakeLLM):
+    """FakeLLM that records, at every call, whether any reference test has run yet."""
+
+    def __init__(self, responses, run_dir):
+        super().__init__(responses)
+        self.run_dir = run_dir
+        self.reference_seen = []
+
+    def complete(self, messages):
+        self.reference_seen.append((self.run_dir / "reference").exists())
+        return super().complete(messages)
+
+
+def test_score_every_attempt_runs_only_after_the_loop(tmp_path):
+    run_dir = tmp_path / "run"
+    watcher = ReferenceWatcher([BAD, BAD, GOOD], run_dir)
+    result = run_agent(CONFIG, ADDER4, watcher, run_dir, max_attempts=3, score_every_attempt=True)
+
+    assert watcher.reference_seen == [False, False, False]  # no reference test while the model works
+    assert [a.reference.outcome for a in result.attempts] == ["fail", "fail", "pass"]
+    assert result.reference is result.attempts[2].reference
+    assert sorted(p.name for p in (run_dir / "reference").iterdir()) == ["attempt_1", "attempt_2", "attempt_3"]
+
+    events = [json.loads(line) for line in (run_dir / "events.jsonl").read_text().splitlines()]
+    kinds = [e["event"] for e in events]
+    last_model_step = max(i for i, k in enumerate(kinds) if k in ("model_called", "checks_done", "feedback_sent"))
+    scored = [i for i, k in enumerate(kinds) if k == "reference_scored"]
+    assert len(scored) == 3 and min(scored) > last_model_step
+    assert [events[i]["final"] for i in scored] == [False, False, True]
+
+    sent = "\n".join(m.content for call in watcher.calls for m in call)
+    for secret in ("ref_tb", "MISMATCH", "__RESULT_TOKEN__", "reference"):
+        assert secret not in sent
+
+
+def test_iteration_that_makes_things_worse_is_recorded(tmp_path):
+    # Attempt 1: correct design, but its testbench is wrong, so the dev checks fail.
+    # Attempt 2: the model "fixes" the design into a broken one that its new testbench accepts.
+    result, _ = run(tmp_path, [reply(ADDER, TB_WRONG_EXPECTATION), reply(ADDER_NO_CARRY, TB_SUM_ONLY)],
+                    max_attempts=3, score_every_attempt=True)
+    assert result.status == "dev_passed"
+    first, last = result.attempts
+    assert not first.dev_passed and first.reference.outcome == "pass"
+    assert last.dev_passed and last.reference.outcome == "fail"
+    assert result.reference.outcome == "fail"  # the score is the final design's
+
+    history = json.loads((result.run_dir / "history.json").read_text())
+    assert [a["reference"]["outcome"] for a in history["attempts"]] == ["pass", "fail"]
+    assert history["settings"]["score_every_attempt"] is True
+
+
+def test_attempt_without_code_is_not_scored(tmp_path):
+    result, _ = run(tmp_path, ["no code here", GOOD], max_attempts=2, score_every_attempt=True)
+    assert result.attempts[0].reference is None
+    assert result.attempts[1].reference.outcome == "pass"
 
 
 def test_student_prompts_folder_is_used(tmp_path):

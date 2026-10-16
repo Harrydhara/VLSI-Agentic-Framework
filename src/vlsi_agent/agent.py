@@ -6,14 +6,19 @@ when the attempts run out, or, before any model call, once the token budget is u
 up (a single call can still overshoot the budget by its own size). Afterwards the
 final design (from the last attempt that produced code) is scored with the circuit's
 hidden reference test. The model never sees that test or its result, and the loop
-never uses it to decide anything.
+never uses it to decide anything: scoring only starts once the loop has finished.
+
+With score_every_attempt, every attempt's design is scored too (still after the
+loop). Attempt 1 is then exactly what a one-shot run would have produced, so one run
+gives both the one-shot and the iterative score, and shows when a revision fixed a
+design or broke one.
 
 Every run writes to its own folder:
 
-    events.jsonl       one JSON event per line, written as things happen
-    history.json       settings, every attempt, the final score
-    attempt_<n>/       response.md (raw reply), design.v, tb.v, tool logs, feedback.txt
-    reference/         the hidden reference test run on the final design
+    events.jsonl            one JSON event per line, written as things happen
+    history.json            settings, every attempt, the scores
+    attempt_<n>/            response.md (raw reply), design.v, tb.v, tool logs, feedback.txt
+    reference/attempt_<n>/  the hidden reference test run on that attempt's design
 """
 
 from __future__ import annotations
@@ -48,6 +53,7 @@ class Attempt:
     code: str | None  # None when the reply contained no Verilog module
     report: DevReport | None  # None when there was no code to check
     feedback: str  # what the model was (or would have been) told about this attempt
+    reference: ReferenceResult | None = None  # scored after the loop; never shown to the model
 
     @property
     def dev_passed(self) -> bool:
@@ -116,9 +122,10 @@ def _check_summary(report: DevReport | None) -> dict:
 
 def run_agent(config: Config, circuit: Circuit, llm: LLM, run_dir: Path, *,
               max_attempts: int | None = None, max_total_tokens: int | None = None,
-              prompts_dir: Path | str | None = None,
+              prompts_dir: Path | str | None = None, score_every_attempt: bool = False,
               on_event: Callable[[dict], None] | None = None) -> RunResult:
-    """Run the generate / check / revise loop on one circuit and score the final design."""
+    """Run the generate / check / revise loop on one circuit, then score the final design
+    (or, with score_every_attempt, every attempt's design) with the hidden reference test."""
     max_attempts = config.agent.max_attempts if max_attempts is None else max_attempts
     budget = config.agent.max_total_tokens if max_total_tokens is None else max_total_tokens
     if max_attempts < 1:
@@ -183,23 +190,29 @@ def run_agent(config: Config, circuit: Circuit, llm: LLM, run_dir: Path, *,
                      Message("user", prompts.feedback_message(number, max_attempts, feedback))]
         log.emit("feedback_sent", attempt=number, chars=len(feedback))
 
+    # The loop is over: only now may the hidden reference test run.
     final = next((a for a in reversed(result.attempts) if a.code is not None), None)
+    with_code = [a for a in result.attempts if a.code is not None]
+    for attempt in with_code if score_every_attempt else [a for a in with_code if a is final]:
+        attempt.reference = reference_test(config.tools, circuit, attempt.workdir / DESIGN_FILE,
+                                           run_dir / "reference" / attempt.workdir.name)
+        log.emit("reference_scored", attempt=attempt.number, final=attempt is final,
+                 outcome=attempt.reference.outcome, passed=attempt.reference.passed,
+                 total=attempt.reference.total)
     if final is not None:
         result.final_attempt = final.number
-        result.reference = reference_test(config.tools, circuit, final.workdir / DESIGN_FILE, run_dir / "reference")
-        log.emit("reference_scored", attempt=final.number, outcome=result.reference.outcome,
-                 passed=result.reference.passed, total=result.reference.total)
+        result.reference = final.reference
 
     result.duration_s = time.monotonic() - start
     log.emit("run_finished", status=result.status, attempts=len(result.attempts),
              total_tokens=result.total_tokens, duration_s=round(result.duration_s, 3),
              reference=result.reference.outcome if result.reference else None)
-    _write_history(result, config, circuit, llm, prompts.folder, budget)
+    _write_history(result, config, circuit, llm, prompts.folder, budget, score_every_attempt)
     return result
 
 
 def _write_history(result: RunResult, config: Config, circuit: Circuit, llm: LLM,
-                   prompts_folder: Path, budget: int) -> None:
+                   prompts_folder: Path, budget: int, score_every_attempt: bool) -> None:
     ref = result.reference
     history = {
         "tool_version": __version__,
@@ -214,6 +227,7 @@ def _write_history(result: RunResult, config: Config, circuit: Circuit, llm: LLM
             "max_total_tokens": budget,
             "prompts": str(prompts_folder),
             "yosys": config.tools.yosys,
+            "score_every_attempt": score_every_attempt,
         },
         "status": result.status,
         "error": result.error,
@@ -230,6 +244,9 @@ def _write_history(result: RunResult, config: Config, circuit: Circuit, llm: LLM
                 "dev_passed": a.dev_passed,
                 "checks": _check_summary(a.report),
                 "feedback": a.feedback,
+                "reference": None if a.reference is None else {
+                    "outcome": a.reference.outcome, "passed": a.reference.passed, "total": a.reference.total,
+                },
             }
             for a in result.attempts
         ],

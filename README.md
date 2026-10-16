@@ -60,8 +60,13 @@ The run status (`dev_passed`, `attempts_exhausted`, `token_budget_exhausted`,
 can disagree: a wrong testbench written by the model can reject a correct design.
 
 Each run gets a folder under `runs/agent/`: `events.jsonl` (written live),
-`history.json` (settings, every attempt, the score), `attempt_<n>/` (raw reply, design,
-testbench, tool logs, the feedback sent), and `reference/`.
+`history.json` (settings, every attempt, the scores), `attempt_<n>/` (raw reply, design,
+testbench, tool logs, the feedback sent), and `reference/attempt_<n>/`.
+
+With `--score-every-attempt`, every attempt's design is scored after the run, not just
+the last one. Attempt 1 is exactly what a one-shot run produces, so one run gives both the
+one-shot and the iterative score, and shows whether a revision fixed a design or broke
+one. Scoring starts only after the loop ends, so it cannot affect the run.
 
 ## Changing the strategy
 

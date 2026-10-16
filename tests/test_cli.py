@@ -77,6 +77,16 @@ def test_run_with_scripted_replies_shows_the_revision(tmp_path, monkeypatch, cap
 
 
 @pytest.mark.integration
+def test_run_can_score_every_attempt(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path)
+    script = cli.PROJECT_ROOT / "examples" / "scripted_adder4.json"
+    assert cli.main(["run", "adder4", "--fake", str(script), "--score-every-attempt"]) == 0
+    out = capsys.readouterr().out
+    assert "hidden reference test on attempt 1: FAIL 256/512 (earlier attempt, for comparison)" in out
+    assert "hidden reference test on attempt 2: PASS 512/512\n" in out
+
+
+@pytest.mark.integration
 def test_one_shot_run_scores_without_revising(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "RUNS_DIR", tmp_path)
     script = cli.PROJECT_ROOT / "examples" / "scripted_adder4.json"

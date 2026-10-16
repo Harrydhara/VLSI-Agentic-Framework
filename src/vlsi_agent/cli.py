@@ -49,6 +49,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--prompts", type=Path, metavar="DIR", help="prompts folder (default: [agent] prompts_dir)")
     run.add_argument("--fake", type=Path, metavar="JSON",
                      help="replay scripted replies from a JSON list of strings instead of calling the model")
+    run.add_argument("--score-every-attempt", action="store_true",
+                     help="after the run, score every attempt with the hidden reference test, not just the last")
 
     ask = sub.add_parser("ask", help="send one prompt to the configured model and print the reply")
     ask.add_argument("prompt")
@@ -134,7 +136,8 @@ def print_event(e: dict) -> None:
         "budget_exhausted": lambda: f"token budget used up ({e['used']}/{e['budget']}), stopping",
         "model_error": lambda: f"attempt {n}: model error: {e['error']}",
         "reference_scored": lambda: f"hidden reference test on attempt {n}: {e['outcome'].upper()}"
-                                    + (f" {e['passed']}/{e['total']}" if e["total"] else ""),
+                                    + (f" {e['passed']}/{e['total']}" if e["total"] else "")
+                                    + ("" if e["final"] else " (earlier attempt, for comparison)"),
         "run_finished": lambda: f"finished: {e['status']} after {e['attempts']} attempt(s), "
                                 f"{e['total_tokens']} tokens, {e['duration_s']:.1f} s",
     }
@@ -169,7 +172,7 @@ def cmd_run(config: Config, args: argparse.Namespace) -> int:
         run_dir = base.with_name(f"{base.name}-{n}")
     prompts = args.prompts.resolve() if args.prompts else None  # relative to where the command runs
     result = run_agent(config, circuit, llm, run_dir, max_attempts=attempts, max_total_tokens=args.budget,
-                       prompts_dir=prompts, on_event=print_event)
+                       prompts_dir=prompts, score_every_attempt=args.score_every_attempt, on_event=print_event)
     print(f"files: {result.run_dir}")
     return 0 if result.reference is not None and result.reference.outcome == "pass" else 1
 
