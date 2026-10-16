@@ -68,6 +68,25 @@ the last one. Attempt 1 is exactly what a one-shot run produces, so one run give
 one-shot and the iterative score, and shows whether a revision fixed a design or broke
 one. Scoring starts only after the loop ends, so it cannot affect the run.
 
+## Benchmark
+
+```bash
+vlsi-agent bench                                   # dev circuits, seeds 1-5, default prompts
+vlsi-agent bench --prompts prompts/default prompts/examples/tb_timing   # compare strategies
+vlsi-agent bench --split heldout --seeds 1-5       # the final comparison only
+vlsi-agent bench --out runs/bench/my_run           # give the same folder again to resume
+```
+
+Every run is iterative, with every attempt scored by the hidden reference test after the
+run. Attempt 1 is exactly a one-shot run, so each run gives a **paired** one-shot and
+iterative score, and counts revisions that **fixed** a design or **broke** one. Results
+go to `runs/bench/<folder>/`: `rows.csv` (one row per run), `summary.md` and
+`summary.json` (tables by strategy, split and circuit: pass counts after each attempt,
+compile and synthesis success, tokens, time, and cell counts for passing designs only).
+
+Tune strategies on `dev`. Use `heldout` once, for the final comparison, with seeds you
+did not use while tuning.
+
 ## Changing the strategy
 
 The prompts are plain text in `prompts/default/` (`system.txt`, `task.txt`,
@@ -121,6 +140,7 @@ design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 | `src/vlsi_agent/evaluate.py` | Scores a design with a circuit's hidden reference test |
 | `src/vlsi_agent/llm.py` | Ollama client, scripted `FakeLLM` for tests, Verilog extraction from replies |
 | `src/vlsi_agent/agent.py` | The generate / check / revise loop, event log, history export |
+| `src/vlsi_agent/bench.py` | Benchmark runner (resumable) and summary tables |
 | `src/vlsi_agent/devcheck.py` | Development checks: the only feedback the model sees |
 | `src/vlsi_agent/prompts.py` | Loads and fills the prompt templates |
 | `prompts/default/` | The starter agent's prompts |

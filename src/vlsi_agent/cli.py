@@ -11,11 +11,12 @@ from pathlib import Path
 
 from vlsi_agent import __version__, doctor
 from vlsi_agent.agent import run_agent
+from vlsi_agent.bench import parse_seeds, run_benchmark, summarize
 from vlsi_agent.circuits import CircuitError, get_circuit, load_circuits
-from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config
+from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config, project_path
 from vlsi_agent.evaluate import reference_test
 from vlsi_agent.llm import FakeLLM, LLMError, Message, OllamaLLM
-from vlsi_agent.prompts import PromptError
+from vlsi_agent.prompts import PromptError, load_prompts
 
 RUNS_DIR = PROJECT_ROOT / "runs"
 
@@ -51,6 +52,19 @@ def build_parser() -> argparse.ArgumentParser:
                      help="replay scripted replies from a JSON list of strings instead of calling the model")
     run.add_argument("--score-every-attempt", action="store_true",
                      help="after the run, score every attempt with the hidden reference test, not just the last")
+
+    bench = sub.add_parser("bench", help="benchmark circuits x strategies x seeds: one-shot vs iterative")
+    which = bench.add_mutually_exclusive_group()
+    which.add_argument("--split", choices=["dev", "heldout", "all"], default="dev",
+                       help="which circuits (default: dev; ask for heldout only for the final comparison)")
+    which.add_argument("--circuits", nargs="+", metavar="NAME", help="specific circuits instead of a split")
+    bench.add_argument("--seeds", default="1-5", help="e.g. 1-5 or 1,3,7 (default: 1-5)")
+    bench.add_argument("--attempts", type=int, help="maximum attempts per run (default: [agent] max_attempts)")
+    bench.add_argument("--budget", type=int, metavar="TOKENS", help="token budget per run")
+    bench.add_argument("--prompts", nargs="+", type=Path, metavar="DIR",
+                       help="one or more strategy folders to compare (default: [agent] prompts_dir)")
+    bench.add_argument("--out", type=Path, help="benchmark folder; give an existing one to resume it")
+    bench.add_argument("--fake", type=Path, metavar="JSON", help="scripted replies; every run replays the same list")
 
     ask = sub.add_parser("ask", help="send one prompt to the configured model and print the reply")
     ask.add_argument("prompt")
@@ -147,24 +161,26 @@ def print_event(e: dict) -> None:
         print(lines[kind](), flush=True)
 
 
+class UsageError(ValueError):
+    """A command-line value that cannot be used (reported with exit code 2)."""
+
+
+def load_fake_script(path: Path) -> list[str]:
+    try:
+        responses = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        raise UsageError(f"cannot read --fake file: {e}") from None
+    if not isinstance(responses, list) or not all(isinstance(r, str) for r in responses):
+        raise UsageError("--fake file must contain a JSON list of strings")
+    return responses
+
+
 def cmd_run(config: Config, args: argparse.Namespace) -> int:
     circuit = get_circuit(args.circuit)
     attempts = 1 if args.one_shot else (args.attempts if args.attempts is not None else config.agent.max_attempts)
     if attempts < 1:
-        print("--attempts must be at least 1", file=sys.stderr)
-        return 2
-    if args.fake:
-        try:
-            responses = json.loads(args.fake.read_text())
-        except (OSError, ValueError) as e:
-            print(f"cannot read --fake file: {e}", file=sys.stderr)
-            return 2
-        if not isinstance(responses, list) or not all(isinstance(r, str) for r in responses):
-            print("--fake file must contain a JSON list of strings", file=sys.stderr)
-            return 2
-        llm = FakeLLM(responses)
-    else:
-        llm = OllamaLLM(config.llm)
+        raise UsageError("--attempts must be at least 1")
+    llm = FakeLLM(load_fake_script(args.fake)) if args.fake else OllamaLLM(config.llm)
 
     mode = "oneshot" if attempts == 1 else f"iter{attempts}"
     base = RUNS_DIR / "agent" / f"{time.strftime('%Y%m%d-%H%M%S')}-{circuit.name}-{mode}"
@@ -177,6 +193,45 @@ def cmd_run(config: Config, args: argparse.Namespace) -> int:
                        prompts_dir=prompts, score_every_attempt=args.score_every_attempt, on_event=print_event)
     print(f"files: {result.run_dir}")
     return 0 if result.reference is not None and result.reference.outcome == "pass" else 1
+
+
+def cmd_bench(config: Config, args: argparse.Namespace) -> int:
+    try:
+        seeds = parse_seeds(args.seeds)
+    except ValueError as e:
+        raise UsageError(f"--seeds: {e}") from None
+    attempts = args.attempts if args.attempts is not None else config.agent.max_attempts
+    if attempts < 1:
+        raise UsageError("--attempts must be at least 1")
+    if args.circuits:
+        circuits, scope = [get_circuit(name) for name in args.circuits], "custom"
+    else:
+        circuits, scope = load_circuits(split=None if args.split == "all" else args.split), args.split
+
+    folders = [p.resolve() for p in args.prompts] if args.prompts else [project_path(config.agent.prompts_dir)]
+    for folder in folders:
+        load_prompts(folder)  # fail now, not halfway through the benchmark
+    names = [f.name for f in folders]
+    strategies = dict(zip(names if len(set(names)) == len(names) else [str(f) for f in folders], folders))
+
+    script = load_fake_script(args.fake) if args.fake else None
+
+    def make_llm(run_config: Config):
+        return FakeLLM(script) if script is not None else OllamaLLM(run_config.llm)
+
+    out = args.out.resolve() if args.out else RUNS_DIR / "bench" / f"{time.strftime('%Y%m%d-%H%M%S')}-{scope}"
+    total = len(circuits) * len(strategies) * len(seeds)
+    print(f"benchmark: {len(circuits)} circuit(s) x {len(strategies)} strategy(ies) x {len(seeds)} seed(s) = "
+          f"{total} runs, up to {attempts} attempts each\nfolder: {out}", flush=True)
+    rows = run_benchmark(config, circuits, strategies, seeds, out, make_llm, max_attempts=attempts,
+                         max_total_tokens=args.budget, on_progress=lambda line: print(line, flush=True))
+
+    print()
+    for name, g in summarize(rows, attempts)["by_strategy"].items():
+        print(f"{name}: one-shot {g['oneshot_pass']}, iterative {g['final_pass']} "
+              f"(fixed {g['fixed']}, broken {g['broken']}), mean {g['mean_tokens']} tokens per run")
+    print(f"tables: {out / 'summary.md'}")
+    return 0
 
 
 def cmd_ask(config: Config, prompt: str, system: str | None, show_thinking: bool) -> int:
@@ -214,6 +269,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_check_fixtures(config, args.names)
         if args.command == "run":
             return cmd_run(config, args)
+        if args.command == "bench":
+            return cmd_bench(config, args)
         if args.command == "ask":
             return cmd_ask(config, args.prompt, args.system, args.show_thinking)
     except CircuitError as e:
@@ -221,6 +278,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except PromptError as e:
         print(f"prompt error: {e}", file=sys.stderr)
+        return 2
+    except UsageError as e:
+        print(str(e), file=sys.stderr)
         return 2
     raise AssertionError(f"unhandled command {args.command!r}")
 

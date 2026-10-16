@@ -15,6 +15,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.toml"
 
 
+def project_path(path: Path | str) -> Path:
+    """A path from the config file: absolute as given, otherwise relative to the project folder."""
+    path = Path(path)
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
 class ConfigError(ValueError):
     """The config file is unreadable, incomplete, or has a bad value."""
 

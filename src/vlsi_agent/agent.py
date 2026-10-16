@@ -31,7 +31,7 @@ from typing import Callable
 
 from vlsi_agent import __version__
 from vlsi_agent.circuits import Circuit
-from vlsi_agent.config import PROJECT_ROOT, Config
+from vlsi_agent.config import Config, project_path
 from vlsi_agent.devcheck import DESIGN_FILE, DevReport, run_dev_checks, separate
 from vlsi_agent.evaluate import ReferenceResult, reference_test
 from vlsi_agent.llm import LLM, Completion, LLMError, Message, extract_verilog
@@ -103,11 +103,6 @@ class EventLog:
             self._on_event(event)
 
 
-def _resolve(path: Path | str) -> Path:
-    path = Path(path)
-    return path if path.is_absolute() else PROJECT_ROOT / path
-
-
 def _check_summary(report: DevReport | None) -> dict:
     if report is None:
         return {"code_found": False}
@@ -130,7 +125,7 @@ def run_agent(config: Config, circuit: Circuit, llm: LLM, run_dir: Path, *,
     budget = config.agent.max_total_tokens if max_total_tokens is None else max_total_tokens
     if max_attempts < 1:
         raise ValueError(f"max_attempts must be at least 1, got {max_attempts}")
-    prompts = load_prompts(_resolve(prompts_dir or config.agent.prompts_dir))
+    prompts = load_prompts(project_path(prompts_dir or config.agent.prompts_dir))
     spec = circuit.spec
 
     run_dir = Path(run_dir)

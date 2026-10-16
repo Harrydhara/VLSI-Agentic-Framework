@@ -26,6 +26,7 @@ DESIGN_NAME = "design.v"
 REFERENCE_TB_NAME = "reference_tb.v"
 REFERENCE_TOP = "ref_tb"
 TOKEN_PLACEHOLDER = "__RESULT_TOKEN__"
+LOG_NAME = "reference.log"  # the compiler or simulator output, e.g. the MISMATCH lines
 
 
 @dataclass(frozen=True)
@@ -53,11 +54,13 @@ def reference_test(tools: ToolsConfig, circuit: Circuit, design_file: Path, work
 
     comp = eda.compile_verilog(tools, workdir, [DESIGN_NAME, REFERENCE_TB_NAME], top=REFERENCE_TOP)
     if not comp.ok:
+        (workdir / LOG_NAME).write_text(comp.run.output)
         first = comp.errors[0] if comp.errors else None
         detail = f"{first.file}:{first.line}: {first.message}" if first else "compilation failed"
         return ReferenceResult("compile_error", None, None, detail, comp, None)
 
     sim = eda.simulate(tools, workdir, plusargs=("+vcd",) if waveform else (), result_token=token)
+    (workdir / LOG_NAME).write_text(sim.run.output)
     if sim.run.timed_out:
         outcome, detail = "timeout", f"simulation still running after {tools.sim_timeout_s:g} s"
     elif not sim.completed:
