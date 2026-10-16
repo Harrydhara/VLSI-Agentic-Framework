@@ -60,9 +60,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_circuits() -> int:
-    for c in load_circuits():
+    circuits = load_circuits()
+    width = max(len(c.name) for c in circuits)
+    for c in circuits:
         ports = ", ".join(f"{'in' if p.direction == 'input' else 'out'} {p.name}{p.range}" for p in c.spec.ports)
-        print(f"{c.name:<10} {c.spec.family:<8} {c.spec.split:<8} {len(c.fixtures)} fixtures  ({ports})")
+        print(f"{c.name:<{width}}  {c.spec.family:<8} {c.spec.split:<8} {len(c.fixtures)} fixtures  ({ports})")
     return 0
 
 

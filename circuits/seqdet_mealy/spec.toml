@@ -1,0 +1,37 @@
+name = "seqdet_mealy"
+family = "fsm"
+split = "heldout"
+top = "seqdet_mealy"
+description = """
+A sequence detector for the bit pattern 1, 1, 0, 1 on din, with a Mealy output.
+
+- din is sampled on each rising edge of clk.
+- rst_n is an asynchronous, active-low reset: whenever rst_n is 0 the detector
+  immediately forgets every bit sampled so far, without waiting for a clock edge.
+- detected is 1 exactly when the last three bits sampled since the reset were 1, 1, 0
+  (oldest first) and din is currently 1; otherwise it is 0.
+- detected is a Mealy output: it depends on din directly, so it changes as soon as din
+  changes, without waiting for a clock edge.
+- Overlapping patterns count: for the input 1 1 0 1 1 0 1, detected is 1 while the 4th
+  bit is on din and again while the 7th bit is on din.
+"""
+
+[[ports]]
+name = "clk"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "rst_n"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "din"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "detected"
+direction = "output"
+width = 1

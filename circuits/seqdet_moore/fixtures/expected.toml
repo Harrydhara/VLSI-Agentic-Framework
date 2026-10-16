@@ -1,0 +1,7 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_shift.v" = "pass"
+"non_overlapping.v" = "fail"
+"mealy_output.v" = "fail"
+"s101_zero_goes_to_s0.v" = "fail"
+"reset_keeps_history.v" = "fail"
