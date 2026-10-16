@@ -160,6 +160,13 @@ def _mean(values: list[float]) -> float | None:
     return round(statistics.mean(values), 1) if values else None
 
 
+def _median(values: list[float]) -> float | int | None:
+    if not values:
+        return None
+    m = statistics.median(values)
+    return int(m) if float(m).is_integer() else m  # 134, not 134.0
+
+
 def summarize_group(rows: list[dict], max_attempts: int) -> dict:
     """Counts like '3/5' rather than percentages: with a handful of runs, a percentage
     suggests more precision than there is."""
@@ -180,7 +187,7 @@ def summarize_group(rows: list[dict], max_attempts: int) -> dict:
         "mean_attempts": _mean([r["attempts_used"] for r in rows]),
         "mean_tokens": _mean([r["total_tokens"] for r in rows]),
         "mean_seconds": _mean([r["duration_s"] for r in rows]),
-        "median_cells_passing": statistics.median(passing_final_cells) if passing_final_cells else None,
+        "median_cells_passing": _median(passing_final_cells),
         "statuses": {s: sum(1 for r in rows if r["status"] == s) for s in sorted({r["status"] for r in rows})},
     }
 

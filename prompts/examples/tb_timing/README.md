@@ -56,6 +56,23 @@ to a system function that does not exist (`$bitstoh`). Next steps: more seeds, h
 clocked circuits, and then the held-out comparison. An idea for a follow-up strategy: tell
 the model to use only standard Verilog-2005 system tasks.
 
+## Results on the harder dev set (5 circuits incl. alu4 and seqdet_moore, seeds 1-5)
+
+| | default | tb_timing |
+|---|---|---|
+| One-shot / iterative reference pass | 23/25 -> 24/25 | 23/25 -> 22/25 |
+| Revisions that fixed / broke a design | 1 / 0 | 0 / 1 |
+| Testbench did not compile (all attempts) | 0 of 43 | 10 of 39 |
+| Mean tokens per run | 7,320 | 5,906 |
+
+**No improvement, and a new failure mode.** The extra guidance made the model write more
+ambitious tests, for example signed comparisons, but with invalid Verilog: `4'd-1`
+instead of `-4'd1`, and `always #5 clk = ~clk;` placed inside an `initial` block. On
+alu4 its testbench then "passed" a design with an unsigned SLT twice: once from the start,
+and once after a revision turned a correct design into a wrong one. The testbench shared
+the design's misunderstanding. Lesson: better testbench *advice* is not enough; the
+feedback has to come from tests that do not share the design's mistakes.
+
 ## Making your own strategy
 
 1. Copy a prompts folder: `cp -r prompts/default prompts/mine`
