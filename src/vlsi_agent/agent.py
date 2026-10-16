@@ -34,6 +34,7 @@ Every run writes to its own folder:
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -235,6 +236,21 @@ def _testbench_in(text: str, top: str) -> str | None:
     return separate(code, top).testbench if code else None
 
 
+_CONFIRMED = re.compile(r"^\W*TESTBENCH OK\W*$", re.MULTILINE)
+
+
+def _review_verdict(text: str, current: str, top: str) -> str | None:
+    """The revised testbench from a review reply, or None if the author kept its testbench:
+    it wrote a line TESTBENCH OK (even if it also pasted code), sent no testbench, or sent
+    the same testbench back."""
+    if _CONFIRMED.search(text):
+        return None
+    revised = _testbench_in(text, top)
+    if revised is None or " ".join(revised.split()) == " ".join(current.split()):
+        return None
+    return revised
+
+
 def _testbench_disagrees(report: DevReport | None) -> bool:
     """True when the design ran against the testbench and failed some of its checks."""
     return bool(report and report.sim and report.sim.completed and report.sim.total is not None
@@ -282,7 +298,7 @@ def _loop_spec_first(run: _Run, prompts: SpecFirstPrompts, max_attempts: int) ->
                 return
             tb_messages.append(Message("assistant", review.text))
             reviews += 1
-            revised = _testbench_in(review.text, spec.top)
+            revised = _review_verdict(review.text, testbench, spec.top)
             folder = tb_dir / f"review{reviews}"
             if revised is None:
                 folder.mkdir(parents=True, exist_ok=True)

@@ -76,6 +76,25 @@ def test_conversations_never_see_each_others_code(tmp_path):
     assert "testbench_confirmed" in events(result)
 
 
+@pytest.mark.parametrize("review_reply", [
+    "1. The spec says {cout, sum} = a + b + cin, so 16 is right.\nTESTBENCH OK\n" + block(TB),  # OK plus pasted code
+    "Checked every value against the specification.\n" + block(TB),                              # same testbench back
+    "**TESTBENCH OK**",                                                                         # decorated OK line
+])
+def test_review_that_keeps_the_testbench_counts_as_confirmed(tmp_path, review_reply):
+    result, fake = run(tmp_path, [block(TB), block(ADDER_NO_CARRY), review_reply, block(ADDER)], max_attempts=3)
+    assert "testbench_confirmed" in events(result) and "testbench_revised" not in events(result)
+    assert roles(result) == ["testbench", "design", "testbench_review", "design"]
+    assert result.status == "dev_passed"
+
+
+def test_review_request_asks_for_the_specification_not_the_design(tmp_path):
+    result, fake = run(tmp_path, [block(TB), block(ADDER_NO_CARRY), "TESTBENCH OK", block(ADDER)], max_attempts=3)
+    request = fake.calls[2][-1].content
+    assert "quote the sentence of the specification" in request
+    assert "Never change a value just to match what the design produced" in request
+
+
 def test_wrong_testbench_is_corrected_on_review(tmp_path):
     # The testbench forgets cin, so it rejects a correct design; on review its author fixes it.
     result, fake = run(tmp_path, [block(TB_FORGETS_CIN), block(ADDER), block(TB)], max_attempts=3)

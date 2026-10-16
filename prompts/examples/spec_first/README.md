@@ -42,6 +42,19 @@ The run folder gets a `testbench/` folder with each testbench version, its check
 the placeholder, and every review reply. `history.json` lists every model call with its
 role (`testbench`, `testbench_fix`, `design`, `testbench_review`).
 
+## Version history
+
+**v1** (commit 153e838) asked the testbench's author to re-check failing checks and either
+fix the testbench or reply `TESTBENCH OK`. On the dev circuits (seeds 1–5) it reached 24/25
+with one genuine fix and cut false rejections of correct designs to 21% (default: 51%).
+But in all 12 reviews the author rewrote its testbench and never confirmed it, and once
+(alu4, seed 2) it changed a correct expected value to match a buggy design.
+
+**v2** (current) requires the author to quote the sentence of the specification behind
+each failing expected value, and to change a value only when that sentence shows the
+testbench was wrong, never just to match the design. A reply with a `TESTBENCH OK` line,
+or the same testbench sent back unchanged, counts as confirmed.
+
 ## Cost
 
 At least two model calls per run instead of one, and a review call whenever a design fails
