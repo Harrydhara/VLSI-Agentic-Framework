@@ -9,7 +9,8 @@ from vlsi_agent.circuits import CircuitError, get_circuit, load_circuit, load_ci
 from vlsi_agent.config import load_config
 from vlsi_agent.evaluate import reference_test
 
-TOOLS = dataclasses.replace(load_config().tools, sim_timeout_s=2)
+TOOLS = load_config().tools
+TOOLS_FAST_TIMEOUT = dataclasses.replace(TOOLS, sim_timeout_s=2)  # for fixtures that are meant to hang
 ALL = load_circuits()
 FIXTURE_CASES = [(c, name, expected) for c in ALL for name, expected in c.fixtures.items()]
 
@@ -121,7 +122,8 @@ def test_reference_test_without_token_placeholder_is_rejected(tmp_path):
 @pytest.mark.parametrize("circuit,fixture,expected", FIXTURE_CASES,
                          ids=[f"{c.name}/{f}" for c, f, _ in FIXTURE_CASES])
 def test_fixture_gets_its_expected_outcome(tmp_path, circuit, fixture, expected):
-    result = reference_test(TOOLS, circuit, circuit.fixture_path(fixture), tmp_path)
+    tools = TOOLS_FAST_TIMEOUT if expected == "timeout" else TOOLS  # alu8's full test alone takes ~1 s
+    result = reference_test(tools, circuit, circuit.fixture_path(fixture), tmp_path)
     assert result.outcome == expected, result.detail
 
 

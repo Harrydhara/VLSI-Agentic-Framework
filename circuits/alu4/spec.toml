@@ -1,0 +1,63 @@
+name = "alu4"
+family = "alu"
+split = "dev"
+top = "alu4"
+description = """
+A 4-bit ALU. op selects the operation and y is the 4-bit result.
+
+op   name  y                                              carry                          overflow
+000  ADD   a + b (low 4 bits)                             bit 4 of the 5-bit sum a + b   (a[3] == b[3]) && (y[3] != a[3])
+001  SUB   a - b (low 4 bits)                             1 exactly when a >= b as       (a[3] != b[3]) && (y[3] != a[3])
+                                                          unsigned numbers (no borrow)
+010  AND   a & b                                          0                              0
+011  OR    a | b                                          0                              0
+100  XOR   a ^ b                                          0                              0
+101  SHL   a shifted left by 1; a 0 enters at bit 0       a[3] (the bit shifted out)     0
+110  SHR   a shifted right by 1, logical; a 0 enters      a[0] (the bit shifted out)     0
+           at bit 3
+111  SLT   1 if a < b as signed two's complement          0                              0
+           numbers, otherwise 0
+
+For every operation: zero is 1 exactly when y == 0, and negative equals y[3].
+The ALU is purely combinational: no clock, no registers, no latches.
+"""
+
+[[ports]]
+name = "a"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "b"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "op"
+direction = "input"
+width = 3
+
+[[ports]]
+name = "y"
+direction = "output"
+width = 4
+
+[[ports]]
+name = "zero"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "carry"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "overflow"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "negative"
+direction = "output"
+width = 1
