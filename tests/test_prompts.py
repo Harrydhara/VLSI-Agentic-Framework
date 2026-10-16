@@ -7,6 +7,22 @@ from vlsi_agent.config import PROJECT_ROOT
 from vlsi_agent.prompts import PromptError, load_prompts, render
 
 DEFAULT = PROJECT_ROOT / "prompts" / "default"
+ALL_FOLDERS = sorted(p.parent for p in (PROJECT_ROOT / "prompts").rglob("system.txt"))
+
+
+def test_shipped_strategies_are_found():
+    names = [str(f.relative_to(PROJECT_ROOT / "prompts")).replace("\\", "/") for f in ALL_FOLDERS]
+    assert "default" in names and "examples/tb_timing" in names
+
+
+@pytest.mark.parametrize("folder", ALL_FOLDERS, ids=lambda p: p.name)
+def test_every_prompts_folder_loads_and_renders(folder):
+    prompts = load_prompts(folder)
+    spec = get_circuit("counter4").spec
+    task = prompts.task_message(spec)
+    assert spec.description in task and spec.interface() in task
+    assert "- a failed check" in prompts.feedback_message(2, 3, "- a failed check")
+    assert "RESULT: %0d/%0d passed" in prompts.system  # the dev checks depend on this line
 
 
 def test_render_replaces_placeholders_and_leaves_verilog_braces_alone():

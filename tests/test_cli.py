@@ -1,3 +1,5 @@
+import shutil
+
 import pytest
 
 from vlsi_agent import cli
@@ -82,6 +84,17 @@ def test_one_shot_run_scores_without_revising(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "up to 1 attempt(s)" in out and "sent the check results" not in out
     assert "hidden reference test on attempt 1: FAIL 256/512" in out
+
+
+@pytest.mark.integration
+def test_run_prompts_path_is_relative_to_the_current_folder(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
+    mine = tmp_path / "mine"
+    shutil.copytree(cli.PROJECT_ROOT / "prompts" / "default", mine)
+    monkeypatch.chdir(tmp_path)
+    script = cli.PROJECT_ROOT / "examples" / "scripted_adder4.json"
+    assert cli.main(["run", "adder4", "--fake", str(script), "--one-shot", "--prompts", "mine"]) == 1
+    assert f"prompts\": \"{mine}" in next((tmp_path / "runs" / "agent").iterdir()).joinpath("events.jsonl").read_text()
 
 
 def test_run_rejects_a_bad_fake_file(tmp_path, capsys):

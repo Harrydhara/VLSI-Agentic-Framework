@@ -167,8 +167,9 @@ def cmd_run(config: Config, args: argparse.Namespace) -> int:
     while run_dir.exists():
         n += 1
         run_dir = base.with_name(f"{base.name}-{n}")
+    prompts = args.prompts.resolve() if args.prompts else None  # relative to where the command runs
     result = run_agent(config, circuit, llm, run_dir, max_attempts=attempts, max_total_tokens=args.budget,
-                       prompts_dir=args.prompts, on_event=print_event)
+                       prompts_dir=prompts, on_event=print_event)
     print(f"files: {result.run_dir}")
     return 0 if result.reference is not None and result.reference.outcome == "pass" else 1
 
