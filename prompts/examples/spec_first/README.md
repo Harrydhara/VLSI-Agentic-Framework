@@ -70,6 +70,23 @@ advance: `prompts/examples/spec_first_v1` and `prompts/examples/spec_first` (v2)
 that adds this section. Both results are reported. Neither version is tuned further
 afterwards, and the held-out results are not used to pick or adjust either one.
 
+**Held-out results** (run at commit `63c4a39`, seeds 1–5, 25 runs per strategy):
+
+| | One-shot → iterative | Fixed / broken | Correct designs rejected | Wrong accepted | Tokens per run |
+|---|---|---|---|---|---|
+| default | 22 → 24 | 2 / 0 | 81% | 0 of 5 | 10,501 |
+| tb_timing | 25 → 25 | 0 / 0 | 54% | none | 6,780 |
+| spec_first v1 | 20 → 21 | 2 / 1 | 65% | 2 of 11 | 12,526 |
+| spec_first v2 | 20 → 23 | 3 / 0 | 59% | 1 of 8 | 12,817 |
+
+Neither version improved on the earlier strategies, and both cost more tokens. The dev
+reduction in false rejections (21%) did not hold on the harder held-out circuits (59–65%).
+The lower one-shot score has a separate cause: with the design-only prompt, the model wrote
+seqdet_mealy's output inside `always @(*)` without declaring it `reg` in 7 of 10 runs,
+where the default prompt led it to `assign`. Three runs ended on a final revision that did
+not compile. Across both splits the strategies score 45–48 of 50, and their order flips
+between dev and held-out, so the score differences are mostly noise at this sample size.
+
 ## Cost
 
 At least two model calls per run instead of one, and a review call whenever a design fails
