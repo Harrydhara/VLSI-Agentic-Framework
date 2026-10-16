@@ -31,6 +31,24 @@ def test_testbench_with_another_name_is_found_by_finish():
     assert "adder4_test" not in src.design
 
 
+def test_repeated_module_keeps_its_last_definition():
+    first = ADDER.replace("a + b + cin", "a - b")  # an early draft the model rewrote later
+    helper_v1 = "module fa(input a, output y);\n  assign y = a;\nendmodule"
+    helper_v2 = helper_v1.replace("assign y = a;", "assign y = ~a;")
+    code = f"{helper_v1}\n{first}\n{helper_v2}\n{ADDER}\n{TB}\n{TB}"
+    assert [name for name, _ in split_modules(code)] == ["fa", "adder4", "tb"]
+    src = separate(code, top="adder4")
+    assert src.module_names == ("fa", "adder4", "tb")
+    assert "a + b + cin" in src.design and "a - b" not in src.design
+    assert "~a" in src.design and src.design.count("module fa") == 1
+    assert src.testbench.count("module tb") == 1
+
+
+def test_cut_off_rewrite_keeps_the_last_complete_definition():
+    code = f"{ADDER}\n\nmodule adder4(input [3:0] a, input [3:0] b,"  # reply ended mid-module
+    assert separate(code, top="adder4").design.count("module adder4") == 1
+
+
 def test_no_testbench():
     src = separate(ADDER, top="adder4")
     assert src.testbench is None and "module adder4" in src.design

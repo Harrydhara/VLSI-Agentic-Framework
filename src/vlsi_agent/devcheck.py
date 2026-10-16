@@ -34,8 +34,14 @@ class Sources:
 
 
 def split_modules(code: str) -> list[tuple[str, str]]:
-    """Return (name, source) for each `module ... endmodule` in the code."""
-    return [(m.group(1), m.group(0)) for m in _MODULE.finditer(code)]
+    """Return (name, source) for each complete `module ... endmodule` in the code.
+
+    If a module is defined more than once (models sometimes rewrite a module several
+    times in one reply), only its last definition is kept, at that definition's place.
+    """
+    found = [(m.group(1), m.group(0)) for m in _MODULE.finditer(code)]
+    last = {name: i for i, (name, _) in enumerate(found)}
+    return [module for i, module in enumerate(found) if last[module[0]] == i]
 
 
 def separate(code: str, top: str) -> Sources:
