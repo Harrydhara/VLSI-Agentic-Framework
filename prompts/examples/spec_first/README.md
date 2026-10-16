@@ -55,6 +55,21 @@ each failing expected value, and to change a value only when that sentence shows
 testbench was wrong, never just to match the design. A reply with a `TESTBENCH OK` line,
 or the same testbench sent back unchanged, counts as confirmed.
 
+**Dev results compared:** v1 went 23/25 one-shot to 24/25 iterative (1 fixed, 0 broken,
+5,985 tokens per run). v2 went 23/25 to 23/25 (2 fixed, 2 broken, 6,744 tokens per run).
+The two fail in opposite directions. v1's author revised its testbench in 12 of 12 reviews,
+twice giving in to a buggy design. v2's author confirmed in 13 of 14, but 10 of those kept
+a testbench that sampled clocked outputs at the wrong time, which justifying values from
+the specification cannot reveal.
+
+## Held-out evaluation (declared before running)
+
+Both versions are evaluated once on the held-out circuits, as two variants declared in
+advance: `prompts/examples/spec_first_v1` and `prompts/examples/spec_first` (v2), with seeds
+1–5, the same settings as the earlier held-out runs, and the agent code frozen at the commit
+that adds this section. Both results are reported. Neither version is tuned further
+afterwards, and the held-out results are not used to pick or adjust either one.
+
 ## Cost
 
 At least two model calls per run instead of one, and a review call whenever a design fails

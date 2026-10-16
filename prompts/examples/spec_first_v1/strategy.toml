@@ -1,0 +1,3 @@
+# The testbench is written from the specification in its own conversation, before any
+# design exists; the design is written in a second conversation. See README.md.
+workflow = "spec_first"
