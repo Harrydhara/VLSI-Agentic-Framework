@@ -23,7 +23,7 @@ def test_spec_markdown_shows_description_and_header():
 @pytest.mark.parametrize("circuit,strategy", [("mux2", "prompts/default"), ("adder4", "prompts/examples/spec_first")])
 def test_demo_mode_explains_its_limits(tmp_path, circuit, strategy):
     updates = list(stream_run(CONFIG, circuit, strategy, 3, demo=True, runs_dir=tmp_path))
-    assert updates == [("", DEMO_LIMITS)]
+    assert updates == [("", DEMO_LIMITS, None)]
     assert not any(tmp_path.iterdir())
 
 
@@ -31,13 +31,13 @@ def test_demo_mode_explains_its_limits(tmp_path, circuit, strategy):
 def test_demo_run_streams_progress_and_a_summary(tmp_path):
     updates = list(stream_run(CONFIG, "adder4", "prompts/default", 3, demo=True, runs_dir=tmp_path))
     assert len(updates) > 5  # one update per event, not just a final one
-    log, status = updates[-1]
+    assert all(run_dir is None for _, _, run_dir in updates[:-1])
+    log, status, run_dir = updates[-1]
     assert "attempt 1: development checks FAILED (compiled, testbench 256/512" in log
     assert "attempt 2: development checks PASSED" in log
     assert status.startswith("**Hidden reference test: PASS** (512/512 checks)")
     assert "one-shot FAIL → final PASS" in status and "2 attempt(s)" in status
-    [run_dir] = tmp_path.iterdir()
-    assert (run_dir / "history.json").is_file()
+    assert [run_dir] == list(tmp_path.iterdir()) and (run_dir / "history.json").is_file()
 
 
 def test_app_builds():
