@@ -6,8 +6,10 @@ dist/
 .pytest_cache/
 .venv/
 
-# Run outputs (generated RTL, logs, waveforms)
-runs/
+# Run outputs (generated RTL, logs, waveforms). The empty folder itself is kept, so Docker
+# Compose mounts it instead of creating a root-owned one.
+runs/*
+!runs/.gitkeep
 *.vcd
 
 # Local editor/preview settings (machine-specific paths)

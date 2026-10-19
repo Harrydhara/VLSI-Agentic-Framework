@@ -1,0 +1,19 @@
+# Use an Ollama that already runs on this machine (for example the WSL systemd service)
+# instead of the ollama container. For Docker Engine on Linux or inside WSL:
+#
+#   docker compose -f compose.yaml -f compose.host-ollama.yaml up -d app
+#
+# The app shares the host's network, so it reaches Ollama at 127.0.0.1:11434 and serves the
+# dashboard on 127.0.0.1:${VLSI_AGENT_PORT:-7860}. Only one Ollama should hold gemma4:26b on
+# a 24 GB GPU at a time, so this is also the way to go when the host's Ollama stays running.
+
+services:
+  app:
+    network_mode: host
+    environment:
+      VLSI_AGENT_OLLAMA_URL: http://127.0.0.1:11434
+    ports: !reset []
+    depends_on: !reset {}
+    command: ["vlsi-agent", "ui", "--host", "127.0.0.1", "--port", "${VLSI_AGENT_PORT:-7860}"]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${VLSI_AGENT_PORT:-7860}/', timeout=5)"]
