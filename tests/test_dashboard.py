@@ -1,4 +1,5 @@
 import dataclasses
+import warnings
 
 import pytest
 
@@ -40,8 +41,14 @@ def test_demo_run_streams_progress_and_a_summary(tmp_path):
     assert [run_dir] == list(tmp_path.iterdir()) and (run_dir / "history.json").is_file()
 
 
-def test_app_builds():
+def test_app_builds_without_new_deprecation_warnings():
     pytest.importorskip("gradio")
     from vlsi_agent.dashboard import build_app
-    app = build_app(CONFIG)
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        app = build_app(CONFIG)
     assert app is not None
+    # Gradio 5 still takes css only in Blocks (pyproject pins gradio<6); anything else is new and should be fixed.
+    others = {str(w.message) for w in caught if issubclass(w.category, DeprecationWarning)
+              and "'css' parameter" not in str(w.message)}
+    assert others == set()

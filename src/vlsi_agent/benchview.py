@@ -7,11 +7,16 @@ which need Plotly (the optional ui extra).
 
 from __future__ import annotations
 
+import csv
+import html
+import io
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from vlsi_agent.bench import row_from_history, summarize_group
+from vlsi_agent.bench import ROW_FIELDS, row_from_history, summarize_group
+from vlsi_agent.config import PROJECT_ROOT
 from vlsi_agent.runview import RUNS_ROOT
 
 BENCH_ROOT = RUNS_ROOT / "bench"
@@ -38,9 +43,12 @@ class BenchView:
         return summarize_group(self.pick(**wanted), self.max_attempts)
 
 
+OWN_CHECK_FIELDS = ["correct", "correct_rejected", "wrong", "wrong_accepted"]
+
+
 def own_check_counts(history: dict) -> dict:
     """Over every scored attempt of a run: how often the agent's own checks agreed with the hidden test."""
-    counts = {"correct": 0, "correct_rejected": 0, "wrong": 0, "wrong_accepted": 0}
+    counts = dict.fromkeys(OWN_CHECK_FIELDS, 0)
     for a in history["attempts"]:
         if not a["reference"]:
             continue  # no code in this reply
@@ -224,3 +232,61 @@ def tokens_figure(view: BenchView):
 
 
 CHARTS = (pass_after_figure, circuit_heatmap, own_checks_figure, fixed_broken_figure, tokens_figure)
+
+
+# --------------------------------------------------------------------------- export
+
+
+def _relative_to_project(path: str) -> str:
+    try:
+        return Path(path).resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def rows_csv(view: BenchView) -> str:
+    """One row per run (the bench.py columns plus the own-check counts), paths relative to the project."""
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=ROW_FIELDS + OWN_CHECK_FIELDS, extrasaction="ignore", lineterminator="\n")
+    writer.writeheader()
+    for r in view.rows:
+        writer.writerow({**r, "attempt_outcomes": "|".join(o or "no_code" for o in r["attempt_outcomes"]),
+                         "run_dir": _relative_to_project(r["run_dir"])})
+    return out.getvalue()
+
+
+def _markdown_to_html(text: str) -> str:
+    """Just enough for bench_markdown: paragraphs, **bold** and `code`."""
+    def inline(part: str) -> str:
+        part = html.escape(part)
+        part = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", part)
+        return re.sub(r"`(.+?)`", r"<code>\1</code>", part)
+    return "".join(f"<p>{inline(p)}</p>" for p in text.split("\n\n") if p.strip())
+
+
+def charts_html(view: BenchView) -> str:
+    """A standalone page with the summary and every chart; plotly.js is embedded once, so it opens offline."""
+    charts = "".join(f'<div class="chart">{chart(view).to_html(full_html=False, include_plotlyjs=(i == 0))}</div>'
+                     for i, chart in enumerate(CHARTS))
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark"><title>Benchmark {html.escape(view.name)}</title>
+<style>
+  body {{ font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 16px; line-height: 1.5;
+         background: Canvas; color: CanvasText; }}
+  code {{ font-family: ui-monospace, monospace; font-size: 0.9em; }}
+  .chart {{ margin: 24px 0; }}
+</style></head>
+<body><h1>Benchmark <code>{html.escape(view.name)}</code></h1>
+{_markdown_to_html(bench_markdown(view))}
+{charts}
+</body></html>
+"""
+
+
+def export_benchmark(view: BenchView, out_dir: Path) -> list[Path]:
+    """<name>-charts.html and <name>-rows.csv in out_dir."""
+    html_path, csv_path = Path(out_dir) / f"{view.name}-charts.html", Path(out_dir) / f"{view.name}-rows.csv"
+    html_path.write_text(charts_html(view), encoding="utf-8")
+    csv_path.write_text(rows_csv(view), encoding="utf-8")
+    return [html_path, csv_path]

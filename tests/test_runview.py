@@ -1,6 +1,8 @@
 import dataclasses
 import json
 import re
+import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -8,11 +10,11 @@ from samples import ADDER, ADDER_NO_CARRY, TB, block, reply
 from vlsi_agent.agent import run_agent
 from vlsi_agent.circuits import get_circuit
 from vlsi_agent.config import PROJECT_ROOT, load_config
-from vlsi_agent.dashboard import (_run_folder, results_for_attempt, results_for_run, waveform_defaults,
-                                  waveform_for_attempt)
+from vlsi_agent.dashboard import (_run_folder, export_run, results_for_attempt, results_for_run,
+                                  waveform_defaults, waveform_for_attempt)
 from vlsi_agent.llm import FakeLLM
-from vlsi_agent.runview import (CHECK_HEADERS, attempt_diffs, check_table, diff_html, list_runs, load_run,
-                                mismatch_lines, run_markdown)
+from vlsi_agent.runview import (CHECK_HEADERS, attempt_diffs, check_table, diff_html, export_run_zip, list_runs,
+                                load_run, mismatch_lines, run_markdown, run_summary_markdown)
 
 _base = load_config()
 CONFIG = dataclasses.replace(_base, tools=dataclasses.replace(_base.tools, sim_timeout_s=2))
@@ -135,3 +137,26 @@ def test_dashboard_waveform_window_for_logs_saved_without_times(scripted_run, mo
     saved = scripted_run / "reference" / "attempt_1" / "reference.log"
     saved.write_text(re.sub(r"MISMATCH at \d+ ns, ", "MISMATCH ", saved.read_text()))  # the old format
     assert waveform_defaults(CONFIG.tools, "ui/demo", "1") == (16, 64)  # found by running the test again
+
+
+@integration
+def test_run_export_zip_has_every_file_and_a_summary(scripted_run, tmp_path):
+    run = load_run(scripted_run)
+    text = run_summary_markdown(run, "ui-demo")
+    assert text.startswith("# Run `ui-demo`\n\n**Hidden reference test: PASS**")
+    assert "## Attempt 1" in text and "MISMATCH at 32 ns, a=1 b=15" in text and "256/512" in text
+    assert "## Final design (attempt 2)\n\n```verilog\nmodule adder4" in text and "`prompts/`" in text
+    path = export_run_zip(run, tmp_path, "ui-demo")
+    names = set(zipfile.ZipFile(path).namelist())
+    assert path.name == "ui-demo.zip"
+    assert {"ui-demo/summary.md", "ui-demo/history.json", "ui-demo/attempt_1/design.v",
+            "ui-demo/reference/attempt_1/reference.log", "ui-demo/prompts/task.txt"} <= names
+
+
+@integration
+def test_dashboard_export_run(scripted_run, monkeypatch):
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    path = Path(export_run("ui/demo"))
+    assert path.name == "ui-demo.zip" and "ui-demo/summary.md" in zipfile.ZipFile(path).namelist()
+    assert export_run("../../src") is None and export_run(None) is None

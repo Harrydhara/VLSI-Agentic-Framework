@@ -10,6 +10,7 @@ from __future__ import annotations
 import difflib
 import html
 import json
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -183,3 +184,44 @@ def attempt_diffs(run: RunView, number: int) -> str:
     return ("<h4>Design</h4>" + diff_html(before.design, now.design, f"attempt {before.number}", f"attempt {now.number}")
             + "<h4>Testbench</h4>"
             + diff_html(before.testbench, now.testbench, f"attempt {before.number}", f"attempt {now.number}"))
+
+
+# --------------------------------------------------------------------------- export
+
+
+def _markdown_table(headers: list[str], rows: list[list]) -> str:
+    lines = ["| " + " | ".join(headers) + " |", "|" + "---|" * len(headers)]
+    return "\n".join(lines + ["| " + " | ".join(str(c) for c in row) + " |" for row in rows])
+
+
+def run_summary_markdown(run: RunView, title: str | None = None) -> str:
+    """A readable account of a run for exports: verdict and settings, each attempt's checks,
+    the hidden test's mismatches, the feedback the model got, and the final design."""
+    parts = [f"# Run `{title or run.folder.name}`", run_markdown(run), "## Attempts",
+             _markdown_table(CHECK_HEADERS, check_table(run))]
+    for a in run.attempts:
+        parts += [f"## Attempt {a.number}", "**Hidden test:** " + mismatch_lines(a)]
+        if a.feedback:
+            parts += ["**Feedback sent to the model:**", "```\n" + a.feedback.strip() + "\n```"]
+    final = run.history.get("final_attempt")
+    design = run.attempt(final).design if final is not None else None
+    parts += [f"## Final design (attempt {final})", f"```verilog\n{design.strip()}\n```"] if design else [
+        "## Final design", "No design was produced."]
+    files = ["`history.json`: settings, every model call, every attempt, the scores",
+             "`events.jsonl`: what happened, in order", "`attempt_<n>/`: the reply, design, testbench and tool logs",
+             "`reference/`: the hidden test's output for each scored attempt"]
+    if (run.folder / "prompts").is_dir():
+        files.append("`prompts/`: the prompt templates this run used")
+    return "\n\n".join(parts + ["## Files", "\n".join(f"- {f}" for f in files)]) + "\n"
+
+
+def export_run_zip(run: RunView, out_dir: Path, name: str | None = None) -> Path:
+    """The whole run folder plus summary.md, as <out_dir>/<name>.zip."""
+    name = name or run.folder.name
+    path = Path(out_dir) / f"{name}.zip"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{name}/summary.md", run_summary_markdown(run, name))
+        for f in sorted(run.folder.rglob("*")):
+            if f.is_file():
+                z.write(f, f"{name}/{f.relative_to(run.folder).as_posix()}")
+    return path

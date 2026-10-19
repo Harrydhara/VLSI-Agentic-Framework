@@ -1,16 +1,18 @@
+import csv
 import dataclasses
+import io
 import json
 
 import pytest
 
 from samples import ADDER, ADDER_NO_CARRY, reply
 from vlsi_agent.bench import delivered_after, run_benchmark
-from vlsi_agent.benchview import (CHARTS, BenchView, bench_markdown, circuit_heatmap, fixed_broken_figure,
-                                  list_benchmarks, load_benchmark, own_check_counts, own_checks_figure,
-                                  pass_after_figure, tokens_figure)
+from vlsi_agent.benchview import (CHARTS, BenchView, bench_markdown, charts_html, circuit_heatmap,
+                                  export_benchmark, fixed_broken_figure, list_benchmarks, load_benchmark,
+                                  own_check_counts, own_checks_figure, pass_after_figure, rows_csv, tokens_figure)
 from vlsi_agent.circuits import get_circuit
 from vlsi_agent.config import PROJECT_ROOT, load_config
-from vlsi_agent.dashboard import benchmark_charts
+from vlsi_agent.dashboard import benchmark_charts, export_benchmark_files
 from vlsi_agent.llm import FakeLLM
 
 _base = load_config()
@@ -24,7 +26,8 @@ def row(outcomes, strategy="default", circuit="alu4", seed=1, correct=0, correct
             "final_outcome": delivered_after(outcomes, len(outcomes)), "status": "attempts_exhausted",
             "own_checks_passed": False, "oneshot_compiled": True, "final_compiled": True, "oneshot_synth_ok": True,
             "final_synth_ok": True, "final_cells": None, "total_tokens": tokens, "duration_s": 2.0,
-            "correct": correct, "correct_rejected": correct_rejected, "wrong": wrong, "wrong_accepted": wrong_accepted}
+            "correct": correct, "correct_rejected": correct_rejected, "wrong": wrong, "wrong_accepted": wrong_accepted,
+            "run_dir": str(PROJECT_ROOT / "runs" / "bench" / "demo" / "runs" / circuit / strategy / f"seed{seed}")}
 
 
 VIEW = BenchView("demo", [
@@ -88,6 +91,22 @@ def test_markdown_mentions_skipped_runs():
     assert "1 run folder(s) could not be read" in bench_markdown(dataclasses.replace(VIEW, skipped=1))
 
 
+def test_rows_csv_has_own_check_counts_and_project_relative_paths():
+    rows = list(csv.DictReader(io.StringIO(rows_csv(VIEW))))
+    assert len(rows) == 4 and rows[0]["attempt_outcomes"] == "fail|pass"
+    assert rows[0]["run_dir"] == "runs/bench/demo/runs/alu4/default/seed1"
+    assert (rows[2]["correct"], rows[2]["wrong"], rows[2]["wrong_accepted"]) == ("1", "2", "1")
+
+
+def test_charts_html_is_one_standalone_page():
+    pytest.importorskip("plotly")
+    page = charts_html(VIEW)
+    assert page.startswith("<!doctype html>") and "<title>Benchmark demo</title>" in page
+    assert "<strong>demo</strong> · 4 runs" in page
+    assert page.count("Plotly.newPlot(") == len(CHARTS)
+    assert 'src="https://cdn.plot.ly' not in page and len(page) > 1_000_000  # plotly.js embedded: opens offline
+
+
 def test_benchmark_charts_stay_inside_runs_bench():
     for name in (None, "", "../ui", "../../src", "no-such-benchmark"):
         summary, *figures = benchmark_charts(name)
@@ -117,3 +136,10 @@ def test_load_a_real_benchmark_folder_and_draw_it(tmp_path, monkeypatch):
     summary, *figures = benchmark_charts("tiny")
     assert summary.startswith("**tiny** · 2 runs · 1 strategy × 1 circuit") and "could not be read" in summary
     assert all(f is not None for f in figures) and len(figures) == len(CHARTS)
+
+    html_path, csv_path = export_benchmark(view, tmp_path)
+    assert (html_path.name, csv_path.name) == ("tiny-charts.html", "tiny-rows.csv")
+    assert [r["seed"] for r in csv.DictReader(io.StringIO(csv_path.read_text()))] == ["1", "2"]
+    exported = export_benchmark_files("tiny")
+    assert [p.rsplit("/", 1)[-1] for p in exported] == ["tiny-charts.html", "tiny-rows.csv"]
+    assert export_benchmark_files("../ui") is None and export_benchmark_files(None) is None

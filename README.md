@@ -65,6 +65,13 @@ iterative per circuit, how often the agent's own checks rejected correct designs
 accepted wrong ones, revisions that fixed or broke a design, and tokens per run. The
 numbers are rebuilt from each run's `history.json`, as the report does.
 
+**Export:** *Export run (.zip)* packs the chosen run folder with a readable `summary.md`
+(verdict, each attempt's checks, the hidden test's mismatches, the feedback sent, the
+final design). *Export charts and rows* gives the benchmark's charts as one standalone
+HTML page (opens offline) and its rows as CSV. The zip holds the raw run files, so
+`history.json` keeps the absolute path of the prompts folder; the CSV's paths are
+relative to the project.
+
 ## Run the agent
 
 ```bash

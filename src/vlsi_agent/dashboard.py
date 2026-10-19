@@ -11,20 +11,22 @@ from __future__ import annotations
 
 import json
 import queue
+import re
+import tempfile
 import threading
 import time
 from pathlib import Path
 from typing import Iterator
 
 from vlsi_agent.agent import DESIGN_FILE, RunResult, run_agent
-from vlsi_agent.benchview import BENCH_ROOT, CHARTS, bench_markdown, list_benchmarks, load_benchmark
+from vlsi_agent.benchview import BENCH_ROOT, CHARTS, bench_markdown, export_benchmark, list_benchmarks, load_benchmark
 from vlsi_agent.circuits import get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ToolsConfig, load_config
 from vlsi_agent.llm import FakeLLM, OllamaLLM
 from vlsi_agent.progress import describe_event
 from vlsi_agent.prompts import TEMPLATES, PromptError, find_strategies, workflow_of
-from vlsi_agent.runview import (CHECK_HEADERS, RUNS_ROOT, attempt_diffs, check_table, list_runs, load_run,
-                                mismatch_lines, run_markdown)
+from vlsi_agent.runview import (CHECK_HEADERS, RUNS_ROOT, attempt_diffs, check_table, export_run_zip, list_runs,
+                                load_run, mismatch_lines, run_markdown)
 from vlsi_agent.strategy_editor import (CUSTOM_ROOT, FILE_HELP, WORKFLOW_TEXT, Draft, check_draft, check_markdown,
                                         draft_from_slots, load_draft, preview, save_draft, suggest_name)
 from vlsi_agent.waveform import (MAX_WINDOW_NS, default_window, display_rows, is_clocked, mismatch_times,
@@ -33,8 +35,8 @@ from vlsi_agent.waveform import (MAX_WINDOW_NS, default_window, display_rows, is
 RUNS_DIR = RUNS_ROOT / "ui"
 DEMO_SCRIPT = PROJECT_ROOT / "examples" / "scripted_adder4.json"
 DEMO_MODEL = "Scripted demo (no GPU)"
-DEMO_LIMITS = ("The scripted demo only covers adder4 with a single-reply strategy (default or tb_timing). "
-               "Choose those, or switch to the real model.")
+DEMO_LIMITS = ("The scripted demo only covers adder4 with a single-reply strategy (default, tb_timing or a "
+               "custom copy of them, not spec_first). Choose those, or switch to the real model.")
 
 CSS = """
 .diff { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.45;
@@ -204,10 +206,18 @@ def waveform_for_attempt(tools: ToolsConfig, relative: str | None, number: str |
     return "\n\n".join(parts), figure
 
 
-def benchmark_charts(name: str | None) -> tuple:
-    """(summary markdown, then one Plotly figure per chart in CHARTS) for a benchmark folder."""
+def _bench_folder(name: str | None) -> Path | None:
+    """A benchmark chosen in the page, only if it is really a folder directly under runs/bench/."""
     folder = (BENCH_ROOT / name).resolve() if name else None
     if folder is None or folder.parent != BENCH_ROOT.resolve() or not folder.is_dir():
+        return None
+    return folder
+
+
+def benchmark_charts(name: str | None) -> tuple:
+    """(summary markdown, then one Plotly figure per chart in CHARTS) for a benchmark folder."""
+    folder = _bench_folder(name)
+    if folder is None:
         return ("Choose a benchmark. Run one with `vlsi-agent bench`; results go to `runs/bench/`.",
                 *([None] * len(CHARTS)))
     view = load_benchmark(folder)
@@ -251,6 +261,28 @@ def editor_save(loaded_from: str | None, workflow: str, name: str, slot_values, 
     return status, entry
 
 
+def _export_dir() -> Path:
+    return Path(tempfile.mkdtemp(prefix="vlsi-export-"))  # Gradio serves (and copies) files from the temp dir
+
+
+def export_run(relative: str | None) -> str | None:
+    """A zip of the chosen run folder with a summary.md, or None if no run is chosen."""
+    folder = _run_folder(relative)
+    if folder is None:
+        return None
+    name = re.sub(r"[^A-Za-z0-9_.-]+", "-", relative.replace("/runs/", "/")).strip("-")  # bench/dev-seeds1-5/alu4/...
+    return str(export_run_zip(load_run(folder), _export_dir(), name))
+
+
+def export_benchmark_files(name: str | None) -> list[str] | None:
+    """The chosen benchmark's charts (standalone HTML) and rows (CSV), or None."""
+    folder = _bench_folder(name)
+    if folder is None:
+        return None
+    view = load_benchmark(folder)
+    return [str(p) for p in export_benchmark(view, _export_dir())] if view.rows else None
+
+
 def _relative(run_dir: Path) -> str:
     return run_dir.relative_to(RUNS_ROOT).as_posix()
 
@@ -291,7 +323,10 @@ def build_app(config: Config | None = None):
                                      filterable=True, scale=5)
             refresh = gr.Button("Refresh list", scale=1)
         run_info = gr.Markdown()
-        checks = gr.Dataframe(headers=CHECK_HEADERS, value=[], interactive=False, wrap=True,
+        with gr.Row(equal_height=True):
+            export_run_button = gr.Button("Export run (.zip)", scale=1)
+            run_export = gr.File(label="Run folder and summary.md", interactive=False, height=60, scale=3)
+        checks = gr.Dataframe(headers=CHECK_HEADERS, value=[], interactive=False, wrap=True, row_count=1,
                               label="Each attempt: the agent's own checks and the hidden test")
         attempt = gr.Radio([], label="Attempt")
         with gr.Tabs():
@@ -322,6 +357,10 @@ def build_app(config: Config | None = None):
                                        label="Benchmark (runs/bench/)", scale=5)
             bench_refresh = gr.Button("Refresh list", scale=1)
         bench_info = gr.Markdown()
+        with gr.Row(equal_height=True):
+            export_bench_button = gr.Button("Export charts and rows", scale=1)
+            bench_export = gr.File(label="Charts (standalone HTML) and rows (CSV)", file_count="multiple",
+                                   interactive=False, height=90, scale=3)
         with gr.Row(equal_height=False):  # side by side when there is room, stacked otherwise
             pass_plot, heatmap_plot = gr.Plot(show_label=False, min_width=460), gr.Plot(show_label=False, min_width=460)
         with gr.Row(equal_height=False):
@@ -362,19 +401,22 @@ def build_app(config: Config | None = None):
 
         circuit.change(spec_markdown, circuit, spec)
 
-        circuit.change(spec_markdown, circuit, spec)
-
         def on_run(circuit_name, strategy_path, mode_name, max_attempts, model_name):
-            for log_text, status_text, run_dir in stream_run(
-                    config, circuit_name, strategy_path, 1 if mode_name == "One-shot" else int(max_attempts),
-                    model_name == DEMO_MODEL):
-                picker = (gr.update(choices=list_runs(), value=_relative(run_dir)) if run_dir is not None
-                          else gr.update())
-                yield log_text, status_text, picker
+            busy = gr.update(interactive=False, value="Running...")  # one run at a time, and it shows
+            try:
+                for log_text, status_text, run_dir in stream_run(
+                        config, circuit_name, strategy_path, 1 if mode_name == "One-shot" else int(max_attempts),
+                        model_name == DEMO_MODEL):
+                    picker = (gr.update(choices=list_runs(), value=_relative(run_dir)) if run_dir is not None
+                              else gr.update())
+                    yield log_text, status_text, picker, busy
+            except Exception as e:  # e.g. a broken strategy: say so, and never leave the button disabled
+                yield gr.update(), f"**Could not start the run:** {type(e).__name__}: {e}", gr.update(), busy
+            yield gr.update(), gr.update(), gr.update(), gr.update(interactive=True, value="Generate & test")
 
         def on_run_picked(relative):
             summary, table, choices, selected = results_for_run(relative)
-            return summary, table, gr.update(choices=choices, value=selected)
+            return summary, table, gr.update(choices=choices, value=selected), None
 
         def on_attempt_wave(relative, number):
             start, length = waveform_defaults(config.tools, relative, number)
@@ -385,12 +427,13 @@ def build_app(config: Config | None = None):
 
         attempt_files = [design, testbench, diffs, hidden, feedback, reply]
         wave_reset = [wave_start, wave_length, wave_note, wave_plot]
-        run_button.click(on_run, [circuit, strategy, mode, attempts, model], [log, status, run_picker])
+        run_button.click(on_run, [circuit, strategy, mode, attempts, model], [log, status, run_picker, run_button])
         refresh.click(lambda: gr.update(choices=list_runs()), None, run_picker)
+        export_run_button.click(export_run, run_picker, run_export)
         # Picking a run often leaves the attempt number as it was (say 3 → 3), which fires no
         # attempt change, so the attempt views are refreshed here; attempt.input covers clicks.
         for picked in (run_picker.change, app.load):
-            (picked(on_run_picked, run_picker, [run_info, checks, attempt])
+            (picked(on_run_picked, run_picker, [run_info, checks, attempt, run_export])
              .then(results_for_attempt, [run_picker, attempt], attempt_files)
              .then(on_attempt_wave, [run_picker, attempt], wave_reset))
         attempt.input(results_for_attempt, [run_picker, attempt], attempt_files).then(
@@ -399,6 +442,8 @@ def build_app(config: Config | None = None):
             trigger(on_draw, [run_picker, attempt, wave_start, wave_length], [wave_note, wave_plot])
         for shown in (bench_picker.change, app.load):
             shown(benchmark_charts, bench_picker, bench_outputs)
+        bench_picker.change(lambda: None, None, bench_export)
+        export_bench_button.click(export_benchmark_files, bench_picker, bench_export)
         bench_refresh.click(lambda: gr.update(choices=list_benchmarks()), None, bench_picker)
 
         def on_editor_load(source, workflow, loaded):
