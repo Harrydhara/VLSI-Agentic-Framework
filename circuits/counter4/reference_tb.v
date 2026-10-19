@@ -40,11 +40,21 @@ module ref_tb;
     end
   endtask
 
-  initial begin
-    if ($test$plusargs("vcd")) begin
-      $dumpfile("reference.vcd");
-      $dumpvars(0, ref_tb);
+  // Waveforms on request: +vcd dumps every signal; +vcd_from=<ns> and +vcd_until=<ns>
+  // limit the dump to that window (the dashboard uses this).
+  integer vcd_from = 0, vcd_until = 0;
+  initial if ($test$plusargs("vcd")) begin
+    $dumpfile("reference.vcd");
+    $dumpvars(0, ref_tb);
+    if ($value$plusargs("vcd_from=%d", vcd_from) && vcd_from > 0) begin
+      $dumpoff;
+      #(vcd_from) $dumpon;
     end
+    if ($value$plusargs("vcd_until=%d", vcd_until) && vcd_until > vcd_from)
+      #(vcd_until - vcd_from) $dumpoff;
+  end
+
+  initial begin
 
     cycle(1, 0); cycle(1, 0);                              // reset
     for (i = 0; i < 20; i = i + 1) cycle(0, 1);            // count up through 15 -> 0

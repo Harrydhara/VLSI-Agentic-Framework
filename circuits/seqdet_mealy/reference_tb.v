@@ -77,11 +77,21 @@ module ref_tb;
     end
   endtask
 
-  initial begin
-    if ($test$plusargs("vcd")) begin
-      $dumpfile("reference.vcd");
-      $dumpvars(0, ref_tb);
+  // Waveforms on request: +vcd dumps every signal; +vcd_from=<ns> and +vcd_until=<ns>
+  // limit the dump to that window (the dashboard uses this).
+  integer vcd_from = 0, vcd_until = 0;
+  initial if ($test$plusargs("vcd")) begin
+    $dumpfile("reference.vcd");
+    $dumpvars(0, ref_tb);
+    if ($value$plusargs("vcd_from=%d", vcd_from) && vcd_from > 0) begin
+      $dumpoff;
+      #(vcd_from) $dumpon;
     end
+    if ($value$plusargs("vcd_until=%d", vcd_until) && vcd_until > vcd_from)
+      #(vcd_until - vcd_from) $dumpoff;
+  end
+
+  initial begin
 
     #2 rst_n = 0;                                   // reset before any clock edge
     #1 check_async_reset;

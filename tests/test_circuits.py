@@ -153,7 +153,7 @@ def test_reference_log_is_saved(tmp_path):
     circuit = get_circuit("adder4")
     failed = reference_test(TOOLS, circuit, circuit.fixture_path("no_carry_out.v"), tmp_path / "fail")
     log = (tmp_path / "fail" / "reference.log").read_text()
-    assert failed.outcome == "fail" and "MISMATCH a=1 b=15" in log and "256/512 passed" in log
+    assert failed.outcome == "fail" and "MISMATCH at 32 ns, a=1 b=15" in log and "256/512 passed" in log
     broken = reference_test(TOOLS, circuit, circuit.fixture_path("wrong_port_name.v"), tmp_path / "broken")
     assert broken.outcome == "compile_error"
     assert "is not a port of dut" in (tmp_path / "broken" / "reference.log").read_text()

@@ -52,6 +52,13 @@ iterative mode and the model, then press **Generate & test** to watch the run's 
 live. "Scripted demo (no GPU)" replays `examples/scripted_adder4.json` for adder4. Runs
 started from the dashboard are saved under `runs/ui/`.
 
+**3. Results** opens any saved run (dashboard, CLI or benchmark): a table of each
+attempt's own checks and hidden-test score, then per attempt the design, testbench,
+changes from the previous attempt, the hidden test's mismatch lines, the feedback sent to
+the model and its reply. The **Waveform** tab re-runs that attempt's design through the
+hidden test and plots a time window (Plotly), opening just before the first mismatch,
+with dashed lines at the mismatches and the test's expected value under each output.
+
 ## Run the agent
 
 ```bash
@@ -153,6 +160,11 @@ Reference tests print `RESULT __RESULT_TOKEN__: ...` instead. The placeholder is
 replaced with a random token on every run and only that line counts, so a generated
 design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 
+Reference tests also print failures as `MISMATCH at <t> ns...` (the first 5), and dump
+waveforms only on request: `+vcd` writes `reference.vcd`, and `+vcd_from=<ns>` /
+`+vcd_until=<ns>` limit it to a window. Copy the block from an existing `reference_tb.v`
+when adding a circuit; the dashboard relies on both.
+
 ## Layout
 
 | Path | What it holds |
@@ -167,6 +179,9 @@ design that prints its own `RESULT` line and calls `$finish` cannot fake a pass.
 | `src/vlsi_agent/bench.py` | Benchmark runner (resumable) and summary tables |
 | `src/vlsi_agent/devcheck.py` | Development checks: the only feedback the model sees |
 | `src/vlsi_agent/prompts.py` | Loads and fills the prompt templates |
+| `src/vlsi_agent/dashboard.py` | The Gradio dashboard (`vlsi-agent ui`) |
+| `src/vlsi_agent/runview.py` | Reads saved run folders for the dashboard's results view |
+| `src/vlsi_agent/waveform.py` | Windowed reference-test VCD dumps, VCD parser, Plotly waveform figure |
 | `prompts/default/` | The starter agent's prompts |
 | `examples/` | Scripted replies for running without a GPU |
 | `docs/` | Reports, e.g. `benchmark-report.html` |

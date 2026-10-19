@@ -16,14 +16,16 @@ import time
 from pathlib import Path
 from typing import Iterator
 
-from vlsi_agent.agent import RunResult, run_agent
+from vlsi_agent.agent import DESIGN_FILE, RunResult, run_agent
 from vlsi_agent.circuits import get_circuit, load_circuits
-from vlsi_agent.config import PROJECT_ROOT, Config, load_config
+from vlsi_agent.config import PROJECT_ROOT, Config, ToolsConfig, load_config
 from vlsi_agent.llm import FakeLLM, OllamaLLM
 from vlsi_agent.progress import describe_event
 from vlsi_agent.prompts import find_strategies, workflow_of
 from vlsi_agent.runview import (CHECK_HEADERS, RUNS_ROOT, attempt_diffs, check_table, list_runs, load_run,
                                 mismatch_lines, run_markdown)
+from vlsi_agent.waveform import (MAX_WINDOW_NS, default_window, display_rows, is_clocked, mismatch_times,
+                                 reference_log_now, reference_waveform, waveform_figure)
 
 RUNS_DIR = RUNS_ROOT / "ui"
 DEMO_SCRIPT = PROJECT_ROOT / "examples" / "scripted_adder4.json"
@@ -152,6 +154,53 @@ def results_for_attempt(relative: str | None, number: str | None) -> tuple[str, 
             mismatch_lines(a), a.feedback or "(nothing: this attempt passed the development checks)", a.reply)
 
 
+WAVE_HINT = "Press **Draw waveform** to run this attempt's design through the hidden test again, recording this window."
+
+
+def waveform_defaults(tools: ToolsConfig, relative: str | None, number: str | None) -> tuple[int, int]:
+    """(start, length) in ns for an attempt's waveform: just before its first hidden-test mismatch."""
+    folder = _run_folder(relative)
+    if folder is None or not number:
+        return 0, 64
+    run = load_run(folder)
+    a = run.attempt(int(number))
+    circuit = get_circuit(run.history["circuit"])
+    log = a.reference_log
+    if "MISMATCH" in log and not mismatch_times(log) and a.design:  # saved before the tests printed the time
+        log = reference_log_now(tools, circuit, a.folder / DESIGN_FILE)
+    return default_window(circuit.spec, log)
+
+
+def waveform_for_attempt(tools: ToolsConfig, relative: str | None, number: str | None, start, length):
+    """(note, Plotly figure or None) for one attempt over [start, start + length] ns."""
+    folder = _run_folder(relative)
+    if folder is None or not number:
+        return "Choose a run and an attempt.", None
+    run = load_run(folder)
+    a = run.attempt(int(number))
+    if not a.design:
+        return "This attempt has no design to simulate.", None
+    circuit = get_circuit(run.history["circuit"])
+    start = max(0, int(start or 0))
+    length = max(1, min(int(length or 1), MAX_WINDOW_NS))
+    w = reference_waveform(tools, circuit, a.folder / DESIGN_FILE, start, length)
+    if w.wave is None:
+        return f"No waveform: the hidden test ended with **{w.outcome.upper()}** ({w.detail}).", None
+    times = mismatch_times(w.log)
+    shown = [t for t in times if start <= t <= start + length]
+    parts = [f"Attempt {a.number} · {start} to {start + length} ns · hidden test **{w.outcome.upper()}** ({w.detail})"]
+    if times:
+        listed = ", ".join(f"{t}" for t in times) + " ns" + (" (the test lists the first 5)" if len(times) == 5 else "")
+        parts.append(f"Mismatches reported at {listed}; "
+                     + ("dashed lines mark those in this window." if shown else "none is in this window."))
+    if not is_clocked(circuit.spec):
+        parts.append("Each input vector is held for 1 ns. The test computes the expected value when it checks, "
+                     "at the end of that 1 ns, so the expected rows trail the outputs by 1 ns.")
+    parts.append("Red marks unknown (x) values. Hover a bus to see its value in binary.")
+    figure = waveform_figure(display_rows(w.wave, circuit.spec), start, start + length, times)
+    return "\n\n".join(parts), figure
+
+
 def _relative(run_dir: Path) -> str:
     return run_dir.relative_to(RUNS_ROOT).as_posix()
 
@@ -204,6 +253,13 @@ def build_app(config: Config | None = None):
                 diffs = gr.HTML(padding=False)
             with gr.Tab("Hidden test"):
                 hidden = gr.Markdown()
+            with gr.Tab("Waveform"):
+                with gr.Row(equal_height=True):
+                    wave_start = gr.Number(0, label="Start (ns)", precision=0, minimum=0)
+                    wave_length = gr.Number(64, label="Length (ns)", precision=0, minimum=1, maximum=MAX_WINDOW_NS)
+                    draw = gr.Button("Draw waveform")
+                wave_note = gr.Markdown(WAVE_HINT)
+                wave_plot = gr.Plot(show_label=False)
             with gr.Tab("Feedback sent to the model"):
                 feedback = gr.Textbox(lines=12, interactive=False, show_label=False)
             with gr.Tab("Model reply"):
@@ -223,11 +279,27 @@ def build_app(config: Config | None = None):
             summary, table, choices, selected = results_for_run(relative)
             return summary, table, gr.update(choices=choices, value=selected)
 
+        def on_attempt_wave(relative, number):
+            start, length = waveform_defaults(config.tools, relative, number)
+            return start, length, WAVE_HINT, None
+
+        def on_draw(relative, number, start, length):
+            return waveform_for_attempt(config.tools, relative, number, start, length)
+
+        attempt_files = [design, testbench, diffs, hidden, feedback, reply]
+        wave_reset = [wave_start, wave_length, wave_note, wave_plot]
         run_button.click(on_run, [circuit, strategy, mode, attempts, model], [log, status, run_picker])
         refresh.click(lambda: gr.update(choices=list_runs()), None, run_picker)
-        run_picker.change(on_run_picked, run_picker, [run_info, checks, attempt])
-        attempt.change(results_for_attempt, [run_picker, attempt], [design, testbench, diffs, hidden, feedback, reply])
-        app.load(on_run_picked, run_picker, [run_info, checks, attempt])
+        # Picking a run often leaves the attempt number as it was (say 3 → 3), which fires no
+        # attempt change, so the attempt views are refreshed here; attempt.input covers clicks.
+        for picked in (run_picker.change, app.load):
+            (picked(on_run_picked, run_picker, [run_info, checks, attempt])
+             .then(results_for_attempt, [run_picker, attempt], attempt_files)
+             .then(on_attempt_wave, [run_picker, attempt], wave_reset))
+        attempt.input(results_for_attempt, [run_picker, attempt], attempt_files).then(
+            on_attempt_wave, [run_picker, attempt], wave_reset)
+        for trigger in (draw.click, wave_start.submit, wave_length.submit):
+            trigger(on_draw, [run_picker, attempt, wave_start, wave_length], [wave_note, wave_plot])
     app.queue(default_concurrency_limit=1)  # one run at a time: the GPU serves one model call at a time anyway
     return app
 

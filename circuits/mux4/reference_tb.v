@@ -25,17 +25,27 @@ module ref_tb;
       if (y === expected) passed = passed + 1;
       else if (shown < 5) begin
         shown = shown + 1;
-        $display("MISMATCH d0=%h d1=%h d2=%h d3=%h sel=%0d: expected y=%h, got y=%h",
-                 d0, d1, d2, d3, sel, expected, y);
+        $display("MISMATCH at %0d ns, d0=%h d1=%h d2=%h d3=%h sel=%0d: expected y=%h, got y=%h",
+                 $time, d0, d1, d2, d3, sel, expected, y);
       end
     end
   endtask
 
-  initial begin
-    if ($test$plusargs("vcd")) begin
-      $dumpfile("reference.vcd");
-      $dumpvars(0, ref_tb);
+  // Waveforms on request: +vcd dumps every signal; +vcd_from=<ns> and +vcd_until=<ns>
+  // limit the dump to that window (the dashboard uses this).
+  integer vcd_from = 0, vcd_until = 0;
+  initial if ($test$plusargs("vcd")) begin
+    $dumpfile("reference.vcd");
+    $dumpvars(0, ref_tb);
+    if ($value$plusargs("vcd_from=%d", vcd_from) && vcd_from > 0) begin
+      $dumpoff;
+      #(vcd_from) $dumpon;
     end
+    if ($value$plusargs("vcd_until=%d", vcd_until) && vcd_until > vcd_from)
+      #(vcd_until - vcd_from) $dumpoff;
+  end
+
+  initial begin
     for (s = 0; s < 4; s = s + 1)
       for (p = 0; p < 16; p = p + 1) begin
         sel = s[1:0];

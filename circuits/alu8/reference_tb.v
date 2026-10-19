@@ -44,11 +44,21 @@ module ref_tb;
     end
   endtask
 
-  initial begin
-    if ($test$plusargs("vcd")) begin
-      $dumpfile("reference.vcd");
-      $dumpvars(0, ref_tb);
+  // Waveforms on request: +vcd dumps every signal; +vcd_from=<ns> and +vcd_until=<ns>
+  // limit the dump to that window (the dashboard uses this).
+  integer vcd_from = 0, vcd_until = 0;
+  initial if ($test$plusargs("vcd")) begin
+    $dumpfile("reference.vcd");
+    $dumpvars(0, ref_tb);
+    if ($value$plusargs("vcd_from=%d", vcd_from) && vcd_from > 0) begin
+      $dumpoff;
+      #(vcd_from) $dumpon;
     end
+    if ($value$plusargs("vcd_until=%d", vcd_until) && vcd_until > vcd_from)
+      #(vcd_until - vcd_from) $dumpoff;
+  end
+
+  initial begin
     for (i = 0; i < 524288; i = i + 1) begin
       {op, a, b} = i[18:0];
       #1;
@@ -57,8 +67,8 @@ module ref_tb;
       if ({y, zero, carry, overflow, negative} === {ey, ez, ec, ev, en}) passed = passed + 1;
       else if (shown < 5) begin
         shown = shown + 1;
-        $display("MISMATCH op=%b a=%0d b=%0d: expected y=%0d zero=%b carry=%b overflow=%b negative=%b, got y=%0d zero=%b carry=%b overflow=%b negative=%b",
-                 op, a, b, ey, ez, ec, ev, en, y, zero, carry, overflow, negative);
+        $display("MISMATCH at %0d ns, op=%b a=%0d b=%0d: expected y=%0d zero=%b carry=%b overflow=%b negative=%b, got y=%0d zero=%b carry=%b overflow=%b negative=%b",
+                 $time, op, a, b, ey, ez, ec, ev, en, y, zero, carry, overflow, negative);
       end
     end
     $display("RESULT __RESULT_TOKEN__: %0d/%0d passed", passed, total);

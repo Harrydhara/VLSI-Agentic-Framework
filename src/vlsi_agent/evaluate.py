@@ -40,8 +40,9 @@ class ReferenceResult:
 
 
 def reference_test(tools: ToolsConfig, circuit: Circuit, design_file: Path, workdir: Path,
-                   waveform: bool = False) -> ReferenceResult:
-    """Copy the design and the reference test into workdir, compile, simulate, classify."""
+                   waveform: bool = False, vcd_window: tuple[int, int] | None = None) -> ReferenceResult:
+    """Copy the design and the reference test into workdir, compile, simulate, classify.
+    waveform writes reference.vcd; vcd_window=(from_ns, until_ns) limits it to that window."""
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(design_file, workdir / DESIGN_NAME)
@@ -59,7 +60,10 @@ def reference_test(tools: ToolsConfig, circuit: Circuit, design_file: Path, work
         detail = f"{first.file}:{first.line}: {first.message}" if first else "compilation failed"
         return ReferenceResult("compile_error", None, None, detail, comp, None)
 
-    sim = eda.simulate(tools, workdir, plusargs=("+vcd",) if waveform else (), result_token=token)
+    plusargs = ["+vcd"] if waveform or vcd_window else []
+    if vcd_window:
+        plusargs += [f"+vcd_from={int(vcd_window[0])}", f"+vcd_until={int(vcd_window[1])}"]
+    sim = eda.simulate(tools, workdir, plusargs=plusargs, result_token=token)
     (workdir / LOG_NAME).write_text(sim.run.output)
     if sim.run.timed_out:
         outcome, detail = "timeout", f"simulation still running after {tools.sim_timeout_s:g} s"

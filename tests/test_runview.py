@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import re
 
 import pytest
 
@@ -7,7 +8,8 @@ from samples import ADDER, ADDER_NO_CARRY, TB, block, reply
 from vlsi_agent.agent import run_agent
 from vlsi_agent.circuits import get_circuit
 from vlsi_agent.config import PROJECT_ROOT, load_config
-from vlsi_agent.dashboard import _run_folder, results_for_attempt, results_for_run
+from vlsi_agent.dashboard import (_run_folder, results_for_attempt, results_for_run, waveform_defaults,
+                                  waveform_for_attempt)
 from vlsi_agent.llm import FakeLLM
 from vlsi_agent.runview import (CHECK_HEADERS, attempt_diffs, check_table, diff_html, list_runs, load_run,
                                 mismatch_lines, run_markdown)
@@ -66,7 +68,7 @@ def test_check_table_has_one_row_per_attempt(scripted_run):
 def test_hidden_test_mismatches_and_diffs(scripted_run):
     run = load_run(scripted_run)
     text = mismatch_lines(run.attempt(1))
-    assert text.startswith("**FAIL 256/512**") and "MISMATCH a=1 b=15" in text
+    assert text.startswith("**FAIL 256/512**") and "MISMATCH at 32 ns, a=1 b=15" in text
     assert "No mismatches" in mismatch_lines(run.attempt(2))
     assert "first attempt" in attempt_diffs(run, 1)
     changes = attempt_diffs(run, 2)
@@ -104,3 +106,32 @@ def test_dashboard_results_functions_on_a_real_run_folder(scripted_run, monkeypa
     design, testbench, diffs, hidden, feedback, model_reply = results_for_attempt("ui/demo", "1")
     assert "assign cout = 1'b0" in design and "MISMATCH" in hidden and "256/512" in feedback
     assert results_for_attempt("ui/demo", "2")[4].startswith("(nothing")
+
+
+@integration
+def test_dashboard_waveform_for_each_attempt(scripted_run, monkeypatch):
+    pytest.importorskip("plotly")
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    tools = CONFIG.tools
+    assert waveform_defaults(tools, "ui/demo", "1") == (16, 64)  # 16 ns before the first mismatch, at 32 ns
+    note, figure = waveform_for_attempt(tools, "ui/demo", "1", 16, 64)
+    assert "hidden test **FAIL** (256/512 checks passed)" in note
+    assert "Mismatches reported at 32, 47, 48, 62, 63 ns (the test lists the first 5)" in note
+    assert "trail the outputs by 1 ns" in note
+    assert list(figure.layout.yaxis.ticktext) == ["a", "b", "cin", "sum", "cout", "expected"]
+    assert len(figure.layout.shapes) == 5
+
+    assert waveform_defaults(tools, "ui/demo", "2") == (0, 64)
+    note, figure = waveform_for_attempt(tools, "ui/demo", "2", 0, 64)
+    assert "**PASS**" in note and "Mismatches" not in note and figure is not None
+    assert waveform_for_attempt(tools, "../../src", "1", 0, 64) == ("Choose a run and an attempt.", None)
+
+
+@integration
+def test_dashboard_waveform_window_for_logs_saved_without_times(scripted_run, monkeypatch):
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    saved = scripted_run / "reference" / "attempt_1" / "reference.log"
+    saved.write_text(re.sub(r"MISMATCH at \d+ ns, ", "MISMATCH ", saved.read_text()))  # the old format
+    assert waveform_defaults(CONFIG.tools, "ui/demo", "1") == (16, 64)  # found by running the test again
