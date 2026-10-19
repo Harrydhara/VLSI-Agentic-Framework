@@ -1,0 +1,31 @@
+# Default settings for the VLSI design agent.
+# To experiment, copy this file and pass the copy with --config instead of editing it.
+
+[llm]
+base_url = "http://localhost:11434"  # Ollama server running inside WSL; VLSI_AGENT_OLLAMA_URL overrides it
+model = "gemma4:26b"
+request_timeout_s = 300
+temperature = 0.2         # lower = more repeatable answers; 0 always picks the likeliest token
+seed = 42                 # helps repeatability, but on a GPU identical runs can still differ
+think = false             # true: gemma4 reasons before answering (slower; those tokens count too)
+keep_alive = "10m"        # how long Ollama keeps the model in GPU memory after a call
+max_output_tokens = 4096  # cap per call; a reply that hits it is marked truncated
+
+[agent]
+max_attempts = 3              # 1 = one-shot baseline; more = revise from development-check feedback
+max_total_tokens = 50000      # no new model call starts once this many tokens (prompt + output) are used
+prompts_dir = "prompts/default"   # system.txt, task.txt, feedback.txt (relative to the project folder)
+feedback_max_chars = 3000     # cap on the tool output sent back to the model per attempt
+
+[tools]
+# Absolute paths on purpose: this machine has three yosys installs (0.33, 0.52, 0.57),
+# and synthesis cell counts can change between versions.
+iverilog = "/usr/bin/iverilog"
+vvp = "/usr/bin/vvp"
+yosys = "/usr/local/bin/yosys"
+
+# A tool still running after its timeout is killed and the result is marked timed_out.
+compile_timeout_s = 30
+sim_timeout_s = 10      # a testbench that never calls $finish hits this
+synth_timeout_s = 60
+max_log_kb = 64         # keep at most this much of each tool's output (start and end)

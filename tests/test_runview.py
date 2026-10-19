@@ -1,0 +1,162 @@
+import dataclasses
+import json
+import re
+import zipfile
+from pathlib import Path
+
+import pytest
+
+from samples import ADDER, ADDER_NO_CARRY, TB, block, reply
+from vlsi_agent.agent import run_agent
+from vlsi_agent.circuits import get_circuit
+from vlsi_agent.config import PROJECT_ROOT, load_config
+from vlsi_agent.dashboard import (_run_folder, export_run, results_for_attempt, results_for_run,
+                                  waveform_defaults, waveform_for_attempt)
+from vlsi_agent.llm import FakeLLM
+from vlsi_agent.runview import (CHECK_HEADERS, attempt_diffs, check_table, diff_html, export_run_zip, list_runs,
+                                load_run, mismatch_lines, run_markdown, run_summary_markdown)
+
+_base = load_config()
+CONFIG = dataclasses.replace(_base, tools=dataclasses.replace(_base.tools, sim_timeout_s=2))
+
+
+def test_diff_html_marks_changes():
+    text = diff_html("a\nb\n", "a\nc\n", "attempt 1", "attempt 2")
+    assert '<div class="diff-del">-b</div>' in text and '<div class="diff-add">+c</div>' in text
+    assert "identical" in diff_html("same", "same", "attempt 1", "attempt 2")
+    assert "no file" in diff_html(None, "x", "attempt 1", "attempt 2")
+    assert "<script>" not in diff_html("", "<script>", "a", "b")  # code is escaped
+
+
+def test_run_picker_cannot_leave_the_runs_folder():
+    assert _run_folder("../../src") is None
+    assert _run_folder("/etc") is None
+    assert _run_folder(None) is None
+    assert results_for_run("../pyproject.toml")[0] == "Choose a run to see its attempts."
+
+
+integration = pytest.mark.integration
+
+
+@pytest.fixture
+def scripted_run(tmp_path):
+    """A real two-attempt run: broken carry first, then the fix."""
+    folder = tmp_path / "runs" / "ui" / "demo"
+    run_agent(CONFIG, get_circuit("adder4"), FakeLLM([reply(ADDER_NO_CARRY), reply(ADDER)]), folder,
+              max_attempts=3, prompts_dir=PROJECT_ROOT / "prompts" / "default", score_every_attempt=True)
+    return folder
+
+
+@integration
+def test_run_view_reads_every_attempt(scripted_run):
+    run = load_run(scripted_run)
+    assert [a.number for a in run.attempts] == [1, 2]
+    first, second = run.attempts
+    assert "assign cout = 1'b0" in first.design and "assign {cout, sum}" in second.design
+    assert "module tb" in first.testbench and first.reply.startswith("Here is the design")
+    assert "256/512 checks passed" in first.feedback and second.feedback == ""
+    assert first.reference["outcome"] == "fail" and second.reference["outcome"] == "pass"
+
+
+@integration
+def test_check_table_has_one_row_per_attempt(scripted_run):
+    rows = check_table(load_run(scripted_run))
+    assert len(CHECK_HEADERS) == len(rows[0])
+    assert rows == [[1, "FAIL", "ok", "256/512", "17 cells", "FAIL 256/512"],
+                    [2, "PASS", "ok", "512/512", "23 cells", "PASS 512/512"]]
+
+
+@integration
+def test_hidden_test_mismatches_and_diffs(scripted_run):
+    run = load_run(scripted_run)
+    text = mismatch_lines(run.attempt(1))
+    assert text.startswith("**FAIL 256/512**") and "MISMATCH at 32 ns, a=1 b=15" in text
+    assert "No mismatches" in mismatch_lines(run.attempt(2))
+    assert "first attempt" in attempt_diffs(run, 1)
+    changes = attempt_diffs(run, 2)
+    assert "diff-del\">-  assign cout = 1&#x27;b0;" in changes and "diff-add\">+  assign {cout, sum}" in changes
+    assert "identical" in changes  # the testbench did not change
+    summary = run_markdown(run)
+    assert summary.startswith("**Hidden reference test: PASS** (512/512 checks passed)")
+    assert "strategy `default`" in summary and "2 of 3 attempt(s)" in summary
+
+
+@integration
+def test_list_runs_finds_run_folders_newest_first(scripted_run, tmp_path):
+    later = tmp_path / "runs" / "agent" / "later"
+    run_agent(CONFIG, get_circuit("adder4"), FakeLLM([reply(ADDER)]), later, max_attempts=1,
+              prompts_dir=PROJECT_ROOT / "prompts" / "default")
+    assert list_runs(tmp_path / "runs") == ["agent/later", "ui/demo"]
+
+
+@integration
+def test_spec_first_run_shows_the_spec_testbench(tmp_path):
+    folder = tmp_path / "run"
+    run_agent(CONFIG, get_circuit("adder4"), FakeLLM([block(TB), block(ADDER)]), folder, max_attempts=3,
+              prompts_dir=PROJECT_ROOT / "prompts" / "examples" / "spec_first", score_every_attempt=True)
+    run = load_run(folder)
+    assert run.attempts[0].testbench.strip() == TB.strip()
+    assert "(testbench written first)" in run_markdown(run)
+
+
+@integration
+def test_dashboard_results_functions_on_a_real_run_folder(scripted_run, monkeypatch):
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    summary, table, choices, selected = results_for_run("ui/demo")
+    assert choices == ["1", "2"] and selected == "2" and len(table) == 2
+    design, testbench, diffs, hidden, feedback, model_reply = results_for_attempt("ui/demo", "1")
+    assert "assign cout = 1'b0" in design and "MISMATCH" in hidden and "256/512" in feedback
+    assert results_for_attempt("ui/demo", "2")[4].startswith("(nothing")
+
+
+@integration
+def test_dashboard_waveform_for_each_attempt(scripted_run, monkeypatch):
+    pytest.importorskip("plotly")
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    tools = CONFIG.tools
+    assert waveform_defaults(tools, "ui/demo", "1") == (16, 64)  # 16 ns before the first mismatch, at 32 ns
+    note, figure = waveform_for_attempt(tools, "ui/demo", "1", 16, 64)
+    assert "hidden test **FAIL** (256/512 checks passed)" in note
+    assert "Mismatches reported at 32, 47, 48, 62, 63 ns (the test lists the first 5)" in note
+    assert "trail the outputs by 1 ns" in note
+    assert list(figure.layout.yaxis.ticktext) == ["a", "b", "cin", "sum", "cout", "expected"]
+    assert len(figure.layout.shapes) == 5
+
+    assert waveform_defaults(tools, "ui/demo", "2") == (0, 64)
+    note, figure = waveform_for_attempt(tools, "ui/demo", "2", 0, 64)
+    assert "**PASS**" in note and "Mismatches" not in note and figure is not None
+    assert waveform_for_attempt(tools, "../../src", "1", 0, 64) == ("Choose a run and an attempt.", None)
+
+
+@integration
+def test_dashboard_waveform_window_for_logs_saved_without_times(scripted_run, monkeypatch):
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    saved = scripted_run / "reference" / "attempt_1" / "reference.log"
+    saved.write_text(re.sub(r"MISMATCH at \d+ ns, ", "MISMATCH ", saved.read_text()))  # the old format
+    assert waveform_defaults(CONFIG.tools, "ui/demo", "1") == (16, 64)  # found by running the test again
+
+
+@integration
+def test_run_export_zip_has_every_file_and_a_summary(scripted_run, tmp_path):
+    run = load_run(scripted_run)
+    text = run_summary_markdown(run, "ui-demo")
+    assert text.startswith("# Run `ui-demo`\n\n**Hidden reference test: PASS**")
+    assert "## Attempt 1" in text and "MISMATCH at 32 ns, a=1 b=15" in text and "256/512" in text
+    assert "## Final design (attempt 2)\n\n```verilog\nmodule adder4" in text and "`prompts/`" in text
+    path = export_run_zip(run, tmp_path, "ui-demo")
+    names = set(zipfile.ZipFile(path).namelist())
+    assert path.name == "ui-demo.zip"
+    assert {"ui-demo/summary.md", "ui-demo/history.json", "ui-demo/attempt_1/design.v",
+            "ui-demo/reference/attempt_1/reference.log", "ui-demo/prompts/task.txt"} <= names
+
+
+@integration
+def test_dashboard_export_run(scripted_run, monkeypatch):
+    import vlsi_agent.dashboard as dashboard
+    monkeypatch.setattr(dashboard, "RUNS_ROOT", scripted_run.parents[1])
+    path = Path(export_run("ui/demo"))
+    assert path.name == "ui-demo.zip" and "ui-demo/summary.md" in zipfile.ZipFile(path).namelist()
+    assert export_run("../../src") is None and export_run(None) is None

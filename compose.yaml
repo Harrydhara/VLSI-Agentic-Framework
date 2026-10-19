@@ -1,0 +1,71 @@
+# The whole stack: the dashboard (app) and the model server (ollama, on an NVIDIA GPU).
+#
+#   docker compose up -d                      # build the app image, start both, pull the model
+#   open http://localhost:7860
+#   docker compose logs -f pull-model         # the first start downloads gemma4:26b (~17 GB)
+#   docker compose down                       # stop; the model and your runs are kept
+#
+# The GPU needs the NVIDIA driver plus the NVIDIA Container Toolkit (Linux) or Docker
+# Desktop's WSL 2 backend (Windows). Already running Ollama on this machine? Use it instead:
+#   docker compose -f compose.yaml -f compose.host-ollama.yaml up -d app
+
+name: vlsi-agent  # containers vlsi-agent-app-1 ..., volume vlsi-agent_ollama-models, whatever the folder is called
+
+services:
+  app:
+    build: .
+    image: vlsi-agent:latest
+    environment:
+      VLSI_AGENT_OLLAMA_URL: http://ollama:11434
+    ports:
+      # Only this computer can open the dashboard: it can start runs and write files, with no login.
+      - "127.0.0.1:${VLSI_AGENT_PORT:-7860}:7860"
+    volumes:
+      # Runs and custom strategies live in the project folder, so they survive the container
+      # and are the same files the CLI and the report use. The container user has UID 1000.
+      - ./runs:/app/runs
+      - ./prompts/custom:/app/prompts/custom
+      - /etc/localtime:/etc/localtime:ro  # run folders are named by local time, as outside Docker
+    depends_on:
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:0.31.2  # the version the benchmarks ran on
+    volumes:
+      - ollama-models:/root/.ollama  # downloaded models, kept between restarts
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # Downloads the model the config uses ([llm] model in config/default.toml), then exits.
+  # The dashboard starts meanwhile; runs work once the download is done.
+  pull-model:
+    image: ollama/ollama:0.31.2
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "gemma4:26b"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  ollama-models:
