@@ -94,3 +94,14 @@ def test_invalid_toml_names_the_file(tmp_path):
 def test_missing_file_is_reported(tmp_path):
     with pytest.raises(ConfigError, match="config file not found"):
         load_config(tmp_path / "nope.toml")
+
+
+def test_ollama_url_can_come_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.delenv("VLSI_AGENT_OLLAMA_URL", raising=False)
+    assert load_config(write(tmp_path, VALID)).llm.base_url == "http://localhost:11434"
+    monkeypatch.setenv("VLSI_AGENT_OLLAMA_URL", "http://ollama:11434/")
+    config = load_config(write(tmp_path, VALID))
+    assert config.llm.base_url == "http://ollama:11434" and config.llm.model == "gemma4:26b"
+    monkeypatch.setenv("VLSI_AGENT_OLLAMA_URL", "ollama:11434")
+    with pytest.raises(ConfigError, match="VLSI_AGENT_OLLAMA_URL should be an http"):
+        load_config(write(tmp_path, VALID))

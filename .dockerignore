@@ -1,0 +1,15 @@
+# Keep the build context small and free of local state: run outputs and custom
+# strategies are mounted at run time (see compose.yaml), not baked into the image.
+.git
+.claude
+**/__pycache__
+**/*.py[cod]
+**/*.egg-info
+.pytest_cache
+.venv
+build
+dist
+runs
+prompts/custom
+*.vcd
+docs

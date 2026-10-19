@@ -7,12 +7,15 @@ silently falling back to a default.
 
 from __future__ import annotations
 
+import dataclasses
+import os
 import tomllib
 from dataclasses import dataclass, fields
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config" / "default.toml"
+OLLAMA_URL_ENV = "VLSI_AGENT_OLLAMA_URL"  # replaces [llm] base_url, e.g. http://ollama:11434 in Docker Compose
 
 
 def project_path(path: Path | str) -> Path:
@@ -113,4 +116,9 @@ def load_config(path: Path | str | None = None) -> Config:
         raise ConfigError(f"{path}: missing section(s): {', '.join(missing)}")
 
     sections = {name: _build_section(name, cls, data[name]) for name, cls in _SECTIONS.items()}
+    url = os.environ.get(OLLAMA_URL_ENV)
+    if url is not None:  # where the model server is depends on where this runs, not on the experiment
+        if not url.startswith(("http://", "https://")):
+            raise ConfigError(f"{OLLAMA_URL_ENV} should be an http:// or https:// URL, got {url!r}")
+        sections["llm"] = dataclasses.replace(sections["llm"], base_url=url.rstrip("/"))
     return Config(**sections, source=path)
