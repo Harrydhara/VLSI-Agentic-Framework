@@ -88,8 +88,10 @@ Tune strategies on `dev`. Use `heldout` once, for the final comparison, with see
 did not use while tuning.
 
 **Results so far:** [`docs/benchmark-report.html`](docs/benchmark-report.html) (open it in a
-browser) reports the first full benchmark: 100 gemma4:26b runs, one-shot vs. iterative,
-with method, tables, how reliable the agent's own checks were, examples and caveats.
+browser) reports 200 gemma4:26b runs in two rounds: one-shot vs. iterative with four
+strategies (default, tb_timing, spec_first v1 and v2), with method, tables, how reliable
+the agent's own checks were, examples and caveats. Its tables and run grids are generated
+from `runs/bench/` by `python3 docs/report/build.py`; the text is in `docs/report/template.html`.
 
 ## Changing the strategy
 
