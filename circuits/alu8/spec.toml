@@ -1,0 +1,71 @@
+name = "alu8"
+family = "alu"
+split = "heldout"
+top = "alu8"
+description = """
+An 8-bit ALU. op selects the operation and y is the 8-bit result.
+
+op   name  y
+000  AND   a & b
+001  OR    a | b
+010  XOR   a ^ b
+011  ADD   a + b (low 8 bits)
+100  SUB   a - b (low 8 bits)
+101  SRA   a shifted right by 1, arithmetic: bit 7 keeps its value
+110  ROL   a rotated left by 1: bit 7 moves to bit 0
+111  SLT   1 if a < b as signed two's complement numbers, otherwise 0
+
+carry:
+- ADD: the carry out of bit 7 (bit 8 of the 9-bit sum a + b).
+- SUB: 1 exactly when a >= b as unsigned numbers (no borrow), otherwise 0.
+- SRA: the bit shifted out (a[0]). ROL: the bit that wrapped around (a[7]).
+- all other operations: 0.
+
+overflow (signed two's complement overflow):
+- ADD: 1 when a and b have the same sign bit and y's sign bit differs from a's.
+- SUB: 1 when a and b have different sign bits and y's sign bit differs from a's.
+- all other operations: 0.
+
+For every operation: zero is 1 exactly when y == 0, and negative equals y[7].
+The ALU is purely combinational: no clock, no registers, no latches.
+"""
+
+[[ports]]
+name = "a"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "b"
+direction = "input"
+width = 8
+
+[[ports]]
+name = "op"
+direction = "input"
+width = 3
+
+[[ports]]
+name = "y"
+direction = "output"
+width = 8
+
+[[ports]]
+name = "zero"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "carry"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "overflow"
+direction = "output"
+width = 1
+
+[[ports]]
+name = "negative"
+direction = "output"
+width = 1

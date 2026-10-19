@@ -1,0 +1,6 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_ripple.v" = "pass"
+"no_carry_out.v" = "fail"
+"ignores_cin.v" = "fail"
+"wrong_port_name.v" = "compile_error"

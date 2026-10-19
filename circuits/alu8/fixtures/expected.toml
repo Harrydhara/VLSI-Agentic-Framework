@@ -1,0 +1,7 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_shared_adder.v" = "pass"
+"sra_logical.v" = "fail"
+"rol_wrong_direction.v" = "fail"
+"slt_unsigned.v" = "fail"
+"sub_overflow_add_formula.v" = "fail"

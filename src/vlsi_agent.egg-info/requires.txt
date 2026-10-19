@@ -1,0 +1,7 @@
+
+[dev]
+pytest>=8
+
+[ui]
+gradio<6,>=5
+plotly>=5

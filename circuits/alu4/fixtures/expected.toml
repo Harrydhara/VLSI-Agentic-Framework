@@ -1,0 +1,8 @@
+# Expected outcome of the reference test for each fixture design.
+"correct.v" = "pass"
+"correct_shared_adder.v" = "pass"
+"sub_complement_width.v" = "fail"
+"slt_unsigned.v" = "fail"
+"slt_sign_of_difference.v" = "fail"
+"overflow_is_carry.v" = "fail"
+"shr_arithmetic.v" = "fail"
