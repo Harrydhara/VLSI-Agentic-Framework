@@ -1,0 +1,39 @@
+name = "mux4"
+family = "mux"
+split = "heldout"
+top = "mux4"
+description = """
+A 4-to-1 multiplexer for 4-bit data.
+sel chooses which input appears on y: sel = 0 gives d0, sel = 1 gives d1, sel = 2 gives d2, sel = 3 gives d3.
+The circuit is purely combinational: no clock, no registers, no latches.
+"""
+
+[[ports]]
+name = "d0"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "d1"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "d2"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "d3"
+direction = "input"
+width = 4
+
+[[ports]]
+name = "sel"
+direction = "input"
+width = 2
+
+[[ports]]
+name = "y"
+direction = "output"
+width = 4

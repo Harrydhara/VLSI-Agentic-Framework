@@ -1,0 +1,38 @@
+name = "seqdet_moore"
+family = "fsm"
+split = "dev"
+top = "seqdet_moore"
+description = """
+A sequence detector for the bit pattern 1, 0, 1, 1 on din, with a Moore output.
+
+- din is sampled on each rising edge of clk.
+- rst is a synchronous, active-high reset: on a rising edge with rst = 1 the detector
+  forgets every bit sampled so far and detected becomes 0. The bit on din at that edge
+  is ignored.
+- detected is 1 during the clock cycle right after the rising edge at which the last
+  four bits sampled since the reset were 1, 0, 1, 1 (oldest first); otherwise it is 0.
+- Overlapping patterns count: for the input 1 0 1 1 0 1 1, detected goes high after the
+  4th bit and again after the 7th bit.
+- detected is a Moore output: it depends only on the detector's state, so it changes
+  only right after a rising edge of clk, never when din changes between edges.
+"""
+
+[[ports]]
+name = "clk"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "rst"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "din"
+direction = "input"
+width = 1
+
+[[ports]]
+name = "detected"
+direction = "output"
+width = 1
