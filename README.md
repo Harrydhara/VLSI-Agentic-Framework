@@ -189,7 +189,7 @@ when adding a circuit; the dashboard relies on both.
 
 | Path | What it holds |
 |---|---|
-| `config/default.toml` | Model, Ollama URL, pinned EDA tool paths, tool timeouts |
+| `config/default.toml` | Model, pinned EDA tool paths, tool timeouts |
 | `src/vlsi_agent/` | The Python package (`cli.py`, `config.py`, `doctor.py`, ...) |
 | `src/vlsi_agent/eda.py` | Runs iverilog, vvp and Yosys with timeouts; returns structured results |
 | `src/vlsi_agent/circuits.py` | Loads and validates circuit folders |
