@@ -22,9 +22,11 @@ from vlsi_agent.circuits import get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ToolsConfig, load_config
 from vlsi_agent.llm import FakeLLM, OllamaLLM
 from vlsi_agent.progress import describe_event
-from vlsi_agent.prompts import find_strategies, workflow_of
+from vlsi_agent.prompts import TEMPLATES, PromptError, find_strategies, workflow_of
 from vlsi_agent.runview import (CHECK_HEADERS, RUNS_ROOT, attempt_diffs, check_table, list_runs, load_run,
                                 mismatch_lines, run_markdown)
+from vlsi_agent.strategy_editor import (CUSTOM_ROOT, FILE_HELP, WORKFLOW_TEXT, Draft, check_draft, check_markdown,
+                                        draft_from_slots, load_draft, preview, save_draft, suggest_name)
 from vlsi_agent.waveform import (MAX_WINDOW_NS, default_window, display_rows, is_clocked, mismatch_times,
                                  reference_log_now, reference_waveform, waveform_figure)
 
@@ -214,6 +216,41 @@ def benchmark_charts(name: str | None) -> tuple:
     return (bench_markdown(view), *(chart(view) for chart in CHARTS))
 
 
+EDITOR_SLOTS = max(len(files) for files in TEMPLATES.values())  # text boxes for one workflow's templates
+
+
+def editor_draft(source: str | None) -> tuple[Draft, str] | None:
+    """A strategy from the list as an editable draft, and a name to save it under."""
+    if source not in strategy_choices():
+        return None
+    folder = PROJECT_ROOT / source
+    return load_draft(folder), suggest_name(folder)
+
+
+def editor_save(loaded_from: str | None, workflow: str, name: str, slot_values, notes: str,
+                root: Path = CUSTOM_ROOT) -> tuple[str, str | None]:
+    """(status markdown, the saved strategy as a strategy-list entry or None). Replaces an
+    existing custom strategy only if it is the one that was loaded into the editor."""
+    draft = draft_from_slots(workflow, slot_values, notes)
+    name = (name or "").strip()
+    target = (Path(root) / name).resolve()
+    may_replace = bool(name) and loaded_from is not None and (PROJECT_ROOT / loaded_from).resolve() == target
+    try:
+        folder, replaced = save_draft(draft, name, root, may_replace=may_replace)
+    except PromptError as e:
+        return f"**Not saved.** {e}", None
+    try:
+        entry = folder.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix()
+    except ValueError:
+        entry = str(folder)
+    warnings = check_draft(draft)[1]
+    status = (f"**Saved `{entry}`**" + (" (replaced the earlier version)" if replaced else "")
+              + ". Choose it under **1. Design inputs** to run it.")
+    if warnings:
+        status += "\n\n" + "\n".join(f"- ⚠️ {w}" for w in warnings)
+    return status, entry
+
+
 def _relative(run_dir: Path) -> str:
     return run_dir.relative_to(RUNS_ROOT).as_posix()
 
@@ -292,6 +329,39 @@ def build_app(config: Config | None = None):
         tokens_plot = gr.Plot(show_label=False)
         bench_outputs = [bench_info, pass_plot, heatmap_plot, checks_plot, fixed_plot, tokens_plot]
 
+        gr.Markdown("### 5. Strategy editor\nCopy a strategy, change its prompts, check them and save the copy under "
+                    "`prompts/custom/`; it then appears in **1. Design inputs**. The shipped strategies are never "
+                    "changed, and every run keeps a copy of the prompts it used.")
+        start_draft, start_name = editor_draft("prompts/default")
+        start_files = list(TEMPLATES[start_draft.workflow])
+        with gr.Row():
+            editor_source = gr.Dropdown(strategy_choices(), value="prompts/default", label="Start from", scale=5)
+            editor_load = gr.Button("Load", scale=1)
+        editor_workflow = gr.State(start_draft.workflow)
+        editor_loaded = gr.State("prompts/default")  # the strategy whose files are in the editor
+        workflow_md = gr.Markdown("Workflow: " + WORKFLOW_TEXT[start_draft.workflow])
+        slots = []
+        for i in range(EDITOR_SLOTS):
+            shown = i < len(start_files)
+            slots.append(gr.Textbox(start_draft.texts[start_files[i]] if shown else "", lines=6, max_lines=30,
+                                    label=f"{start_files[i]}.txt" if shown else "template",
+                                    info=FILE_HELP[start_files[i]] if shown else None, visible=shown))
+        editor_notes = gr.Textbox(start_draft.notes, lines=4, label="README.md: notes on this strategy",
+                                  info="What you changed and why. Never sent to the model.")
+        with gr.Row(equal_height=True):
+            editor_name = gr.Textbox(start_name, label="Save as prompts/custom/<name>", scale=4)
+            editor_check = gr.Button("Check", scale=1)
+            editor_save_button = gr.Button("Save", variant="primary", scale=1)
+        editor_status = gr.Markdown()
+        with gr.Accordion("Preview: the prompts as the model receives them", open=False):
+            with gr.Row(equal_height=True):
+                preview_circuit = gr.Dropdown([c.name for c in load_circuits()], value="adder4",
+                                              label="Circuit", scale=4)
+                preview_button = gr.Button("Preview", scale=1)
+            preview_text = gr.Textbox(lines=24, max_lines=60, interactive=False, show_label=False)
+
+        circuit.change(spec_markdown, circuit, spec)
+
         circuit.change(spec_markdown, circuit, spec)
 
         def on_run(circuit_name, strategy_path, mode_name, max_attempts, model_name):
@@ -330,6 +400,40 @@ def build_app(config: Config | None = None):
         for shown in (bench_picker.change, app.load):
             shown(benchmark_charts, bench_picker, bench_outputs)
         bench_refresh.click(lambda: gr.update(choices=list_benchmarks()), None, bench_picker)
+
+        def on_editor_load(source, workflow, loaded):
+            found = editor_draft(source)
+            if found is None:
+                return (workflow, loaded, gr.update(), gr.update(), gr.update(), "Choose a strategy to load.",
+                        *[gr.update()] * EDITOR_SLOTS)
+            draft, name = found
+            files = list(TEMPLATES[draft.workflow])
+            boxes = [gr.update(value=draft.texts[files[i]], label=f"{files[i]}.txt", info=FILE_HELP[files[i]],
+                               visible=True) if i < len(files) else gr.update(value="", visible=False)
+                     for i in range(EDITOR_SLOTS)]
+            return (draft.workflow, source, "Workflow: " + WORKFLOW_TEXT[draft.workflow], name, draft.notes,
+                    f"Loaded `{source}`.", *boxes)
+
+        def on_editor_check(workflow, notes, *texts):
+            return check_markdown(draft_from_slots(workflow, texts, notes))
+
+        def on_editor_save(loaded, workflow, name, notes, *texts):
+            status_text, entry = editor_save(loaded, workflow, name, texts, notes)
+            if entry is None:
+                return status_text, loaded, gr.update(), gr.update()
+            choices = strategy_choices()
+            return status_text, entry, gr.update(choices=choices), gr.update(choices=choices, value=entry)
+
+        def on_editor_preview(workflow, circuit_name, *texts):
+            return preview(draft_from_slots(workflow, texts), get_circuit(circuit_name).spec)
+
+        editor_load.click(on_editor_load, [editor_source, editor_workflow, editor_loaded],
+                          [editor_workflow, editor_loaded, workflow_md, editor_name, editor_notes, editor_status,
+                           *slots])
+        editor_check.click(on_editor_check, [editor_workflow, editor_notes, *slots], editor_status)
+        editor_save_button.click(on_editor_save, [editor_loaded, editor_workflow, editor_name, editor_notes, *slots],
+                                 [editor_status, editor_loaded, strategy, editor_source])
+        preview_button.click(on_editor_preview, [editor_workflow, preview_circuit, *slots], preview_text)
     app.queue(default_concurrency_limit=1)  # one run at a time: the GPU serves one model call at a time anyway
     return app
 

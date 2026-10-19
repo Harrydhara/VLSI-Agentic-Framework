@@ -26,6 +26,7 @@ Every run writes to its own folder:
 
     events.jsonl            one JSON event per line, written as things happen
     history.json            settings, every model call, every attempt, the scores
+    prompts/                the templates this run used (the strategy folder may be edited later)
     attempt_<n>/            response.md (raw reply), design.v, tb.v, tool logs, feedback.txt
     testbench/              spec_first only: each testbench version and its checks
     reference/attempt_<n>/  the hidden reference test run on that attempt's design
@@ -47,7 +48,7 @@ from vlsi_agent.devcheck import (DESIGN_FILE, DevReport, Sources, check_testbenc
                                  separate)
 from vlsi_agent.evaluate import ReferenceResult, reference_test
 from vlsi_agent.llm import LLM, Completion, LLMError, Message, extract_verilog
-from vlsi_agent.prompts import Prompts, SpecFirstPrompts, load_strategy
+from vlsi_agent.prompts import TEMPLATES, Prompts, SpecFirstPrompts, load_strategy
 
 STATUSES = ("dev_passed", "attempts_exhausted", "token_budget_exhausted", "llm_error")
 TESTBENCH_TRIES = 3  # spec_first: the first testbench plus up to two fixes
@@ -338,6 +339,7 @@ def run_agent(config: Config, circuit: Circuit, llm: LLM, run_dir: Path, *,
 
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=False)
+    _save_prompts(strategy, run_dir / "prompts")
     log = EventLog(run_dir / "events.jsonl", on_event)
     start = time.monotonic()
     result = RunResult(run_dir, circuit.name, "attempts_exhausted", max_attempts, workflow=strategy.workflow)
@@ -370,6 +372,15 @@ def run_agent(config: Config, circuit: Circuit, llm: LLM, run_dir: Path, *,
              reference=result.reference.outcome if result.reference else None)
     _write_history(result, config, circuit, llm, strategy.folder, budget, score_every_attempt)
     return result
+
+
+def _save_prompts(strategy: Prompts | SpecFirstPrompts, folder: Path) -> None:
+    """Keep the templates as loaded: a loadable strategy folder of its own."""
+    folder.mkdir()
+    for name in TEMPLATES[strategy.workflow]:
+        (folder / f"{name}.txt").write_text(getattr(strategy, name) + "\n", encoding="utf-8")
+    if strategy.workflow != "single":
+        (folder / "strategy.toml").write_text(f'workflow = "{strategy.workflow}"\n', encoding="utf-8")
 
 
 def _write_history(result: RunResult, config: Config, circuit: Circuit, llm: LLM,

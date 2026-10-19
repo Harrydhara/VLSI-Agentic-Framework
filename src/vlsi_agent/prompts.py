@@ -48,11 +48,25 @@ SPEC_FIRST_ALLOWED = {
     "design_task": _SPEC,
     "design_feedback": {"attempt", "max_attempts", "feedback"},
 }
+TEMPLATES = {"single": ALLOWED, "spec_first": SPEC_FIRST_ALLOWED}  # workflow -> {file: allowed placeholders}
 _PLACEHOLDER = re.compile(r"\{\{\s*([A-Za-z_]+)\s*\}\}")
 
 
 class PromptError(ValueError):
     """A prompts folder is missing a file or a template uses an unknown placeholder."""
+
+
+def placeholders(template: str) -> set[str]:
+    return set(_PLACEHOLDER.findall(template))
+
+
+def unknown_placeholder_message(template: str, allowed: set[str]) -> str | None:
+    """Why a template would be rejected ("{{x}}; allowed here: ..."), or None if it is fine."""
+    unknown = sorted(placeholders(template) - allowed)
+    if not unknown:
+        return None
+    allowed_text = ", ".join("{{" + a + "}}" for a in sorted(allowed)) or "none"
+    return f"unknown placeholder(s) {', '.join('{{' + u + '}}' for u in unknown)}; allowed here: {allowed_text}"
 
 
 def render(template: str, values: dict[str, object]) -> str:
@@ -124,11 +138,9 @@ def _load_files(folder: Path, allowed_by_file: dict[str, set[str]]) -> dict[str,
             text = path.read_text()
         except FileNotFoundError:
             raise PromptError(f"missing prompt file: {path}") from None
-        unknown = sorted(set(_PLACEHOLDER.findall(text)) - allowed)
-        if unknown:
-            allowed_text = ", ".join("{{" + a + "}}" for a in sorted(allowed)) or "none"
-            raise PromptError(f"{path}: unknown placeholder(s) {', '.join('{{' + u + '}}' for u in unknown)}; "
-                              f"allowed here: {allowed_text}")
+        problem = unknown_placeholder_message(text, allowed)
+        if problem:
+            raise PromptError(f"{path}: {problem}")
         texts[name] = text.strip()
     return texts
 

@@ -125,6 +125,13 @@ The prompts are plain text in `prompts/default/` (`system.txt`, `task.txt`,
 `--prompts <folder>` (or set `prompts_dir` in a config copy). A misspelled placeholder
 is reported before any model call.
 
+Or use the dashboard's **5. Strategy editor**: load any strategy, edit its templates
+(each shows which placeholders it may use), **Check** them, preview them filled in for a
+circuit, and **Save** the copy as `prompts/custom/<name>/`, which then appears in the
+strategy list. The shipped strategies are never changed, and saving never replaces a
+different custom strategy than the one loaded. Every run keeps a copy of the templates it
+used in its folder (`prompts/`), so editing a strategy later does not change the record.
+
 A strategy folder can also change the workflow with a `strategy.toml`.
 [`prompts/examples/spec_first/`](prompts/examples/spec_first/README.md) uses
 `workflow = "spec_first"`: the testbench is written from the specification in its own
@@ -188,6 +195,7 @@ when adding a circuit; the dashboard relies on both.
 | `src/vlsi_agent/dashboard.py` | The Gradio dashboard (`vlsi-agent ui`) |
 | `src/vlsi_agent/runview.py` | Reads saved run folders for the dashboard's results view |
 | `src/vlsi_agent/benchview.py` | Reads benchmark folders and draws the dashboard's benchmark charts |
+| `src/vlsi_agent/strategy_editor.py` | Loads, checks, previews and saves strategies for the dashboard's editor |
 | `src/vlsi_agent/waveform.py` | Windowed reference-test VCD dumps, VCD parser, Plotly waveform figure |
 | `prompts/default/` | The starter agent's prompts |
 | `examples/` | Scripted replies for running without a GPU |

@@ -188,6 +188,9 @@ def test_student_prompts_folder_is_used(tmp_path):
     result, fake = run(tmp_path, [GOOD], max_attempts=1, prompts_dir=mine)
     assert fake.calls[0][1].content.startswith("STUDENT STRATEGY")
     assert result.status == "dev_passed"
+    (mine / "task.txt").write_text("EDITED LATER\n{{description}}\n{{interface}}\n")
+    kept = (result.run_dir / "prompts" / "task.txt").read_text()
+    assert kept.startswith("STUDENT STRATEGY")  # the run keeps the prompts it actually used
 
 
 def test_bad_prompt_template_fails_before_any_model_call(tmp_path):
