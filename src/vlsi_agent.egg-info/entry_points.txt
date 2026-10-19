@@ -1,0 +1,2 @@
+[console_scripts]
+vlsi-agent = vlsi_agent.cli:main
