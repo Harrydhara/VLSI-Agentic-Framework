@@ -12,6 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+ui = ["gradio>=5,<6", "plotly>=5"]
 
 [project.scripts]
 vlsi-agent = "vlsi_agent.cli:main"

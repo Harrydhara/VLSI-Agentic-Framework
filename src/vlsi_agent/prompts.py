@@ -157,6 +157,12 @@ def workflow_of(folder: Path | str) -> str:
     return workflow
 
 
+def find_strategies(root: Path | str) -> list[Path]:
+    """Every strategy folder under root: a folder with system.txt or strategy.toml."""
+    root = Path(root)
+    return sorted({p.parent for name in ("system.txt", "strategy.toml") for p in root.rglob(name)})
+
+
 def load_strategy(folder: Path | str) -> Prompts | SpecFirstPrompts:
     """Load a strategy folder of either workflow."""
     folder = Path(folder)

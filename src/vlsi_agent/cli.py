@@ -16,6 +16,7 @@ from vlsi_agent.circuits import CircuitError, get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ConfigError, load_config, project_path
 from vlsi_agent.evaluate import reference_test
 from vlsi_agent.llm import FakeLLM, LLMError, Message, OllamaLLM
+from vlsi_agent.progress import describe_event
 from vlsi_agent.prompts import PromptError, load_strategy
 
 RUNS_DIR = PROJECT_ROOT / "runs"
@@ -65,6 +66,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="one or more strategy folders to compare (default: [agent] prompts_dir)")
     bench.add_argument("--out", type=Path, help="benchmark folder; give an existing one to resume it")
     bench.add_argument("--fake", type=Path, metavar="JSON", help="scripted replies; every run replays the same list")
+
+    ui = sub.add_parser("ui", help='open the browser dashboard (needs: pip install -e ".[ui]")')
+    ui.add_argument("--host", default="127.0.0.1", help="address to listen on (default: 127.0.0.1)")
+    ui.add_argument("--port", type=int, default=7860, help="port (default: 7860)")
 
     ask = sub.add_parser("ask", help="send one prompt to the configured model and print the reply")
     ask.add_argument("prompt")
@@ -116,67 +121,10 @@ def cmd_check_fixtures(config: Config, names: list[str]) -> int:
     return 0 if not wrong else 1
 
 
-def _checks_text(e: dict) -> str:
-    if not e.get("code_found"):
-        return "no Verilog in the reply"
-    if not e.get("has_top"):
-        return "top module missing"
-    if not e.get("compiled"):
-        return "design does not compile"
-    parts = ["compiled"]
-    if not e.get("has_testbench"):
-        parts.append("no testbench")
-    elif e.get("sim_timed_out"):
-        parts.append("testbench timed out")
-    elif "tb_total" in e:
-        parts.append(f"testbench {e['tb_passed']}/{e['tb_total']}" if e["tb_total"] is not None
-                     else "testbench printed no RESULT")
-    if e.get("synth_ok"):
-        parts.append(f"{e['cells']} cells" + (f", {e['latches']} latches" if e["latches"] else ""))
-    elif "synth_ok" in e:
-        parts.append("synthesis failed")
-    return ", ".join(parts)
-
-
-def _who(e: dict) -> str:
-    """Which step an event belongs to: 'attempt 2', 'testbench', 'attempt 2: testbench review'."""
-    role, n = e.get("role", "design"), e.get("attempt")
-    if role == "design":
-        return f"attempt {n}"
-    label = role.replace("_", " ")
-    return f"attempt {n}: {label}" if n else label
-
-
 def print_event(e: dict) -> None:
-    kind, n = e["event"], e.get("attempt")
-    lines = {
-        "run_started": lambda: f"{e['circuit']} ({e['split']}) with {e['model']}: up to {e['max_attempts']} "
-                               f"attempt(s), budget {e['max_total_tokens']} tokens"
-                               + (", testbench written first from the spec" if e.get("workflow") == "spec_first"
-                                  else ""),
-        "model_called": lambda: f"{_who(e)}: asking the model...",
-        "model_replied": lambda: f"{_who(e)}: reply of {e['output_tokens']} tokens in {e['duration_s']:.1f} s"
-                                 + (" (cut off at the token limit)" if e["truncated"] else ""),
-        "testbench_checked": lambda: f"testbench version {e['version']}: "
-                                     + ("usable" if e["usable"] else "not usable, asking for a fix"),
-        "testbench_unusable": lambda: f"no usable testbench after {e['tries']} tries; "
-                                      "checking compile and synthesis only",
-        "testbench_confirmed": lambda: f"attempt {n}: the testbench's author confirmed the failed checks",
-        "testbench_revised": lambda: f"attempt {n}: the testbench's author corrected the testbench; checking again",
-        "testbench_revision_rejected": lambda: f"attempt {n}: the corrected testbench was not usable; keeping the old one",
-        "checks_done": lambda: f"attempt {n}: development checks {'PASSED' if e['passed'] else 'FAILED'} "
-                               f"({_checks_text(e)})" + (" after the testbench fix" if e.get("recheck") else ""),
-        "feedback_sent": lambda: f"attempt {n}: sent the check results back to the model ({e['chars']} chars)",
-        "budget_exhausted": lambda: f"token budget used up ({e['used']}/{e['budget']}), stopping",
-        "model_error": lambda: f"{_who(e)}: model error: {e['error']}",
-        "reference_scored": lambda: f"hidden reference test on attempt {n}: {e['outcome'].upper()}"
-                                    + (f" {e['passed']}/{e['total']}" if e["total"] else "")
-                                    + ("" if e["final"] else " (earlier attempt, for comparison)"),
-        "run_finished": lambda: f"finished: {e['status']} after {e['attempts']} attempt(s), "
-                                f"{e['total_tokens']} tokens, {e['duration_s']:.1f} s",
-    }
-    if kind in lines:
-        print(lines[kind](), flush=True)
+    line = describe_event(e)
+    if line:
+        print(line, flush=True)
 
 
 class UsageError(ValueError):
@@ -252,6 +200,17 @@ def cmd_bench(config: Config, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(host: str, port: int) -> int:
+    try:
+        import gradio  # noqa: F401
+    except ModuleNotFoundError:
+        print('The dashboard needs Gradio and Plotly: pip install -e ".[ui]"', file=sys.stderr)
+        return 2
+    from vlsi_agent.dashboard import launch
+    launch(host, port)
+    return 0
+
+
 def cmd_ask(config: Config, prompt: str, system: str | None, show_thinking: bool) -> int:
     messages = ([Message("system", system)] if system else []) + [Message("user", prompt)]
     try:
@@ -289,6 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(config, args)
         if args.command == "bench":
             return cmd_bench(config, args)
+        if args.command == "ui":
+            return cmd_ui(args.host, args.port)
         if args.command == "ask":
             return cmd_ask(config, args.prompt, args.system, args.show_thinking)
     except CircuitError as e:

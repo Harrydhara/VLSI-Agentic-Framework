@@ -40,6 +40,18 @@ still give different answers, so compare settings over several runs.
 ~/.venvs/vlsi-agent/bin/pytest -m "not integration"   # skip tests that need the real tools/Ollama
 ```
 
+## Dashboard
+
+```bash
+~/.venvs/vlsi-agent/bin/pip install -e ".[ui]"   # Gradio and Plotly, once
+~/.venvs/vlsi-agent/bin/vlsi-agent ui             # then open http://localhost:7860
+```
+
+Pick a circuit (its specification and module header are shown), a strategy, one-shot or
+iterative mode and the model, then press **Generate & test** to watch the run's progress
+live. "Scripted demo (no GPU)" replays `examples/scripted_adder4.json` for adder4. Runs
+started from the dashboard are saved under `runs/ui/`.
+
 ## Run the agent
 
 ```bash
