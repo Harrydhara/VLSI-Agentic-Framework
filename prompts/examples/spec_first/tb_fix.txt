@@ -1,0 +1,5 @@
+Your testbench could not be used. It was run against a placeholder design whose outputs are always 0, so failed checks are expected there; only these problems matter:
+
+{{feedback}}
+
+Fix them. Reply with the complete testbench in one ```verilog code block.

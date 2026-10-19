@@ -1,0 +1,11 @@
+A design written separately from the same specification fails these checks of your testbench:
+
+{{failures}}
+
+Either the design or your testbench is wrong. A failing check is not evidence that your expected value is wrong: the design's actual value may simply be a bug.
+
+For each failing check, work out the expected value again from the specification alone, and quote the sentence of the specification that determines it. Change an expected value only if that sentence shows your testbench computed it incorrectly. Never change a value just to match what the design produced.
+
+Reply in this order:
+1. For each failing check: the quoted sentence, the value it requires, and whether your testbench's expected value matches it.
+2. Then, if every expected value follows the specification, a line containing exactly TESTBENCH OK. Otherwise, the complete corrected testbench in one ```verilog code block.

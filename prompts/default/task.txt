@@ -1,0 +1,8 @@
+Design the following circuit.
+
+{{description}}
+
+Use exactly this module header:
+{{interface}}
+
+Write the design (top module {{top}}) and a self-checking testbench module named tb.

@@ -1,0 +1,7 @@
+Attempt {{attempt}} of {{max_attempts}} did not pass the development checks:
+
+{{feedback}}
+
+Before changing the design, decide whether the testbench is wrong. Common testbench mistakes: comparing before the outputs settle (no #1 after changing inputs), comparing at the clock edge instead of #1 after it, expecting the value from before the edge, or a reference model that does not follow the specification (reset type and polarity, wrap-around).
+
+Fix whichever is wrong. Reply with both complete code blocks again: the design first, then the testbench.

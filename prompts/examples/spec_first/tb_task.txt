@@ -1,0 +1,8 @@
+Write a self-checking testbench for the following circuit. The design does not exist yet; it will be written separately from the same specification.
+
+{{description}}
+
+The design under test will have exactly this module header:
+{{interface}}
+
+Write only the testbench module tb.

@@ -1,0 +1,5 @@
+A design written separately from the same specification fails these checks of your testbench:
+
+{{failures}}
+
+For each failing check, work out the expected value again from the specification. If your testbench is wrong, reply with the complete corrected testbench in one ```verilog code block. If your testbench is right, reply with exactly: TESTBENCH OK

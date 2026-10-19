@@ -1,0 +1,5 @@
+Attempt {{attempt}} of {{max_attempts}} did not pass the development checks:
+
+{{feedback}}
+
+The testbench was written separately from the same specification. When it reports failed checks, its author has already re-checked those expected values against the specification. Fix the design. Reply with the complete design in one ```verilog code block.
