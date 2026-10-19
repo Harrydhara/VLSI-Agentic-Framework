@@ -59,6 +59,12 @@ the model and its reply. The **Waveform** tab re-runs that attempt's design thro
 hidden test and plots a time window (Plotly), opening just before the first mismatch,
 with dashed lines at the mismatches and the test's expected value under each output.
 
+**4. Benchmarks** charts any folder under `runs/bench/` (Plotly): hidden-test passes after
+1, 2, 3 attempts per strategy (one-shot vs iterative on the same runs), one-shot →
+iterative per circuit, how often the agent's own checks rejected correct designs or
+accepted wrong ones, revisions that fixed or broke a design, and tokens per run. The
+numbers are rebuilt from each run's `history.json`, as the report does.
+
 ## Run the agent
 
 ```bash
@@ -181,6 +187,7 @@ when adding a circuit; the dashboard relies on both.
 | `src/vlsi_agent/prompts.py` | Loads and fills the prompt templates |
 | `src/vlsi_agent/dashboard.py` | The Gradio dashboard (`vlsi-agent ui`) |
 | `src/vlsi_agent/runview.py` | Reads saved run folders for the dashboard's results view |
+| `src/vlsi_agent/benchview.py` | Reads benchmark folders and draws the dashboard's benchmark charts |
 | `src/vlsi_agent/waveform.py` | Windowed reference-test VCD dumps, VCD parser, Plotly waveform figure |
 | `prompts/default/` | The starter agent's prompts |
 | `examples/` | Scripted replies for running without a GPU |

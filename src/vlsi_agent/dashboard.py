@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Iterator
 
 from vlsi_agent.agent import DESIGN_FILE, RunResult, run_agent
+from vlsi_agent.benchview import BENCH_ROOT, CHARTS, bench_markdown, list_benchmarks, load_benchmark
 from vlsi_agent.circuits import get_circuit, load_circuits
 from vlsi_agent.config import PROJECT_ROOT, Config, ToolsConfig, load_config
 from vlsi_agent.llm import FakeLLM, OllamaLLM
@@ -201,6 +202,18 @@ def waveform_for_attempt(tools: ToolsConfig, relative: str | None, number: str |
     return "\n\n".join(parts), figure
 
 
+def benchmark_charts(name: str | None) -> tuple:
+    """(summary markdown, then one Plotly figure per chart in CHARTS) for a benchmark folder."""
+    folder = (BENCH_ROOT / name).resolve() if name else None
+    if folder is None or folder.parent != BENCH_ROOT.resolve() or not folder.is_dir():
+        return ("Choose a benchmark. Run one with `vlsi-agent bench`; results go to `runs/bench/`.",
+                *([None] * len(CHARTS)))
+    view = load_benchmark(folder)
+    if not view.rows:
+        return (f"`{name}` has no finished runs yet.", *([None] * len(CHARTS)))
+    return (bench_markdown(view), *(chart(view) for chart in CHARTS))
+
+
 def _relative(run_dir: Path) -> str:
     return run_dir.relative_to(RUNS_ROOT).as_posix()
 
@@ -265,6 +278,20 @@ def build_app(config: Config | None = None):
             with gr.Tab("Model reply"):
                 reply = gr.Markdown()
 
+        gr.Markdown("### 4. Benchmarks")
+        benchmarks = list_benchmarks()
+        with gr.Row():
+            bench_picker = gr.Dropdown(benchmarks, value=benchmarks[0] if benchmarks else None,
+                                       label="Benchmark (runs/bench/)", scale=5)
+            bench_refresh = gr.Button("Refresh list", scale=1)
+        bench_info = gr.Markdown()
+        with gr.Row(equal_height=False):  # side by side when there is room, stacked otherwise
+            pass_plot, heatmap_plot = gr.Plot(show_label=False, min_width=460), gr.Plot(show_label=False, min_width=460)
+        with gr.Row(equal_height=False):
+            checks_plot, fixed_plot = gr.Plot(show_label=False, min_width=460), gr.Plot(show_label=False, min_width=460)
+        tokens_plot = gr.Plot(show_label=False)
+        bench_outputs = [bench_info, pass_plot, heatmap_plot, checks_plot, fixed_plot, tokens_plot]
+
         circuit.change(spec_markdown, circuit, spec)
 
         def on_run(circuit_name, strategy_path, mode_name, max_attempts, model_name):
@@ -300,6 +327,9 @@ def build_app(config: Config | None = None):
             on_attempt_wave, [run_picker, attempt], wave_reset)
         for trigger in (draw.click, wave_start.submit, wave_length.submit):
             trigger(on_draw, [run_picker, attempt, wave_start, wave_length], [wave_note, wave_plot])
+        for shown in (bench_picker.change, app.load):
+            shown(benchmark_charts, bench_picker, bench_outputs)
+        bench_refresh.click(lambda: gr.update(choices=list_benchmarks()), None, bench_picker)
     app.queue(default_concurrency_limit=1)  # one run at a time: the GPU serves one model call at a time anyway
     return app
 
